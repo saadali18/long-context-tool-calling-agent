@@ -1,0 +1,16 @@
+# BFCL benchmark config (Project A1).
+# Every run copies this config into its output folder so results stay reproducible.
+
+# BFCL category. Long-context mode is switched on automatically
+# for any category whose name contains "long_context".
+category: multi_turn_long_context
+
+# Tool subset: the backend classes whose functions are offered to the model.
+# TradingBot (20 functions) + MessageAPI (10 functions) = 30 functions.
+# Only tasks that use nothing outside these classes are kept (33 of 200).
+classes:
+  - TradingBot
+  - MessageAPI
+
+# BFCL stops a turn after this many model steps (same as BFCL's MAXIMUM_STEP_LIMIT).
+max_steps_per_turn: 20

@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Run outputs (keep the folders, not the files)
+outputs/*
+!outputs/.gitkeep
+
