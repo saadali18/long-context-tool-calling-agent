@@ -1,0 +1,11 @@
+=== process memory (VmRSS = now, VmHWM = peak) ===
+VmHWM:	 5876960 kB
+VmRSS:	 5876960 kB
+
+=== system memory with server loaded ===
+               total        used        free      shared  buff/cache   available
+Mem:            8062        2380        1611          13        4155        5682
+Swap:           2047           0        2047
+
+=== llama.cpp allocations from server log ===
+0.04.763.552 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 16384, kv_unified = 'true'

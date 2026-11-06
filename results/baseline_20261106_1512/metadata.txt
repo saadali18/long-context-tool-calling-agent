@@ -1,0 +1,34 @@
+date:        2026-11-06T15:12:19+05:00
+model:       /home/edge_maria/models/qwen3-1.7b-bf16.gguf
+7b147f8d7b909659bccc3c3aa27be7185166aa33ae2ac985e99dcdbb3b88a74f  /home/edge_maria/models/qwen3-1.7b-bf16.gguf
+llama.cpp:   efbf6e80a5c121584736b5face7cfced9da707dd
+version: 0.9.0-dev (build 12115, commit efbf6e80a)
+built with GNU 14.2.0 for Linux aarch64
+CMAKE_BUILD_TYPE:STRING=Release
+GGML_NATIVE:BOOL=ON
+CMAKE_BUILD_TYPE-STRINGS:INTERNAL=Debug;Release;MinSizeRel;RelWithDebInfo
+board:       Raspberry Pi 5 Model B Rev 1.0
+kernel:      6.18.50+rpt-rpi-2712
+boot target: multi-user.target
+--- config.txt (active lines) ---
+dtparam=audio=on
+camera_auto_detect=1
+display_auto_detect=1
+auto_initramfs=1
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+disable_fw_kms_setup=1
+arm_64bit=1
+disable_overscan=1
+arm_boost=1
+[cm4]
+otg_mode=1
+[cm5]
+dtoverlay=dwc2,dr_mode=host
+[pi5]
+dtoverlay=nospi10
+[all]
+[all]
+dtparam=cooling_fan=on
+throttled at start: throttled=0x0
+throttled at end: throttled=0x0

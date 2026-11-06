@@ -1,0 +1,10 @@
+0.00.002.490 I srv  llama_server: initializing ...
+0.00.007.264 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.018.559 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.020.120 I srv    load_model: loading model '/home/edge_maria/models/qwen3-1.7b-bf16.gguf'
+0.00.540.746 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.01.028.953 I cmn          init: llama threadpool init, n_threads = 4
+0.04.763.552 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 16384, kv_unified = 'true'
+0.04.790.072 I srv  server_run_i: model loaded
+0.04.790.082 I srv  server_on_li: listening on http://127.0.0.1:8080
+0.05.039.066 I srv    operator(): operator(): cleaning up before exit...
