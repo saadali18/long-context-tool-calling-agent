@@ -14,3 +14,9 @@ classes:
 
 # BFCL stops a turn after this many model steps (same as BFCL's MAXIMUM_STEP_LIMIT).
 max_steps_per_turn: 20
+
+# Our own task files, added after BFCL's tasks (one task per line, BFCL format with the
+# correct calls in the same entry; see src/bfcl/loader.py:load_task_file).
+# data/long_tasks.jsonl: the long-session tasks (16k-32k tokens, Task 1).
+extra_task_files:
+  - data/long_tasks.jsonl
