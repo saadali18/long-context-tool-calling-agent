@@ -23,7 +23,7 @@ from pathlib import Path
 import yaml
 
 from bfcl.evaluator import evaluate_task
-from bfcl.loader import load_function_docs, load_tasks, to_openai_tools
+from bfcl.loader import load_function_docs, load_task_file, load_tasks, to_openai_tools
 from bfcl.metrics import summarize
 from bfcl.task_runner import GroundTruthCaller, run_task
 
@@ -38,6 +38,7 @@ def parse_args():
         --ids: run only the given task ids.
         --name: name of the output folder (default <caller>_<date>_<time>).
         --out-dir: parent folder for output folders (default outputs).
+        --tasks: which tasks to run: all (default), bfcl (BFCL's only) or extra (our files only).
     """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", default="configs/bfcl.yaml")
@@ -46,6 +47,12 @@ def parse_args():
     parser.add_argument("--ids", nargs="*", help="run only these task ids")
     parser.add_argument("--name", default=None, help="run folder name (default: <caller>_<time>)")
     parser.add_argument("--out-dir", default="outputs")
+    parser.add_argument(
+        "--tasks",
+        choices=["all", "bfcl", "extra"],
+        default="all",
+        help="all = BFCL tasks + our task files; bfcl = BFCL tasks only; extra = our task files only",
+    )
     return parser.parse_args()
 
 
@@ -76,7 +83,11 @@ def main():
 
     function_docs = load_function_docs(cfg["classes"])
     tools = to_openai_tools(function_docs)
-    tasks = load_tasks(cfg["category"], cfg["classes"])
+    extra_files = cfg.get("extra_task_files", []) if args.tasks != "bfcl" else []
+    tasks = load_tasks(cfg["category"], cfg["classes"], extra_files)
+    if args.tasks == "extra":
+        extra_ids = {t.id for path in extra_files for t in load_task_file(path, cfg["classes"])}
+        tasks = [t for t in tasks if t.id in extra_ids]
     if args.ids:
         tasks = [t for t in tasks if t.id in set(args.ids)]
     tasks = tasks[: args.limit] if args.limit else tasks

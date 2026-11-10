@@ -21,6 +21,7 @@ import copy
 import json
 from dataclasses import dataclass, field
 from importlib import resources
+from pathlib import Path
 
 from bfcl_eval.constants.executable_backend_config import MULTI_TURN_FUNC_DOC_FILE_MAPPING
 
@@ -86,21 +87,69 @@ def _read_jsonl(path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
-def load_tasks(category: str, classes: list[str] | None = None) -> list[BFCLTask]:
+def load_task_file(path, classes: list[str] | None = None) -> list[BFCLTask]:
+    """Load our own tasks (e.g. the long-session tasks) from one JSON Lines file.
+
+    Each line is one task in BFCL's format, with the correct answers in the same entry
+    (BFCL keeps them in a separate file; ours keeps them together so a task is one line):
+
+        {"id": "a1_long_context_1",
+         "question": [[{"role": "user", "content": "..."}], ...],   # one list per turn
+         "initial_config": {"TradingBot": {...}, "MessageAPI": {...}},
+         "involved_classes": ["TradingBot", "MessageAPI"],
+         "ground_truth": [["get_order_details(order_id=12345)"], ...]}   # one list per turn
+
+    The id must contain "long_context": BFCL's checker switches long-context mode on from the
+    id (it strips the last "_<number>" and looks for "long_context" in the rest), so without
+    it the checker would run the tools without the long outputs and every task would fail.
+
+    Args:
+        path: Path of the .jsonl file.
+        classes: Same as in `load_tasks`: keep only tasks inside the tool subset.
+
+    Returns:
+        A list of BFCLTask objects, in file order.
+    """
+    tasks = []
+    for entry in _read_jsonl(Path(path)):
+        if "long_context" not in entry["id"].rsplit("_", 1)[0]:
+            raise ValueError(f"{path}: task id {entry['id']!r} must contain 'long_context' before its number")
+        if len(entry["question"]) != len(entry["ground_truth"]):
+            raise ValueError(f"{path}: task {entry['id']} has a different number of turns and answer turns")
+        if classes is not None and not set(entry["involved_classes"]) <= set(classes):
+            continue
+        tasks.append(
+            BFCLTask(
+                id=entry["id"],
+                turns=entry["question"],
+                initial_config=entry["initial_config"],
+                involved_classes=entry["involved_classes"],
+                ground_truth=entry["ground_truth"],
+                excluded_functions=entry.get("excluded_function", []),
+            )
+        )
+    return tasks
+
+
+def load_tasks(
+    category: str, classes: list[str] | None = None, extra_files: list[str] | None = None
+) -> list[BFCLTask]:
     """Load the tasks of a BFCL category together with their correct answers.
 
     BFCL stores the tasks and the correct answers in two separate files with the same name
     (`BFCL_v4_<category>.json` and `possible_answer/BFCL_v4_<category>.json`). This function
-    reads both and joins them by task id.
+    reads both and joins them by task id. Our own task files (`extra_files`, see
+    `load_task_file`) are added after BFCL's tasks.
 
     Args:
         category: BFCL category name, e.g. "multi_turn_long_context".
         classes: The tool groups in our subset, e.g. ["TradingBot", "MessageAPI"]. If given,
             a task is kept only when every tool group it uses is inside this list, so the
             model always has all the tools a task needs. If None, all tasks are kept.
+        extra_files: Paths of our own task files (the `extra_task_files` config key).
 
     Returns:
-        A list of BFCLTask objects, in BFCL's file order.
+        A list of BFCLTask objects, BFCL's tasks first (in BFCL's file order), then ours.
     """
     data_dir = _data_dir()
     entries = _read_jsonl(data_dir / f"BFCL_v4_{category}.json")
@@ -121,6 +170,13 @@ def load_tasks(category: str, classes: list[str] | None = None) -> list[BFCLTask
                 excluded_functions=entry.get("excluded_function", []),
             )
         )
+    for path in extra_files or []:
+        tasks.extend(load_task_file(path, classes))
+
+    ids = [t.id for t in tasks]
+    duplicates = sorted({i for i in ids if ids.count(i) > 1})
+    if duplicates:
+        raise ValueError(f"duplicate task ids: {duplicates}")
     return tasks
 
 
