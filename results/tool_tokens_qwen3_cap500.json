@@ -1,0 +1,328 @@
+{
+  "tokenizer": "/home/edge_maria/models/Qwen3-1.7B/tokenizer.json",
+  "classes": [
+    "TradingBot",
+    "MessageAPI"
+  ],
+  "tool_schema_tokens": 3001,
+  "per_tool": {
+    "get_stock_info": {
+      "calls": 29,
+      "mean_tokens": 7943.517241379311,
+      "max_tokens": 7945
+    },
+    "fund_account": {
+      "calls": 5,
+      "mean_tokens": 21,
+      "max_tokens": 21
+    },
+    "send_message": {
+      "calls": 11,
+      "mean_tokens": 37,
+      "max_tokens": 37
+    },
+    "view_messages_sent": {
+      "calls": 5,
+      "mean_tokens": 64,
+      "max_tokens": 147
+    },
+    "add_to_watchlist": {
+      "calls": 15,
+      "mean_tokens": 12.8,
+      "max_tokens": 20
+    },
+    "get_watchlist": {
+      "calls": 16,
+      "mean_tokens": 1971,
+      "max_tokens": 1979
+    },
+    "place_order": {
+      "calls": 20,
+      "mean_tokens": 42.3,
+      "max_tokens": 44
+    },
+    "get_order_details": {
+      "calls": 22,
+      "mean_tokens": 1576.909090909091,
+      "max_tokens": 1604
+    },
+    "get_available_stocks": {
+      "calls": 7,
+      "mean_tokens": 3982,
+      "max_tokens": 3982
+    },
+    "cancel_order": {
+      "calls": 10,
+      "mean_tokens": 17,
+      "max_tokens": 17
+    },
+    "get_account_info": {
+      "calls": 6,
+      "mean_tokens": 45.166666666666664,
+      "max_tokens": 46
+    },
+    "remove_stock_from_watchlist": {
+      "calls": 7,
+      "mean_tokens": 14.142857142857142,
+      "max_tokens": 15
+    },
+    "withdraw_funds": {
+      "calls": 1,
+      "mean_tokens": 21,
+      "max_tokens": 21
+    },
+    "trading_logout": {
+      "calls": 2,
+      "mean_tokens": 8,
+      "max_tokens": 8
+    },
+    "get_current_time": {
+      "calls": 2,
+      "mean_tokens": 12,
+      "max_tokens": 12
+    },
+    "delete_message": {
+      "calls": 3,
+      "mean_tokens": 33,
+      "max_tokens": 33
+    },
+    "message_login": {
+      "calls": 1,
+      "mean_tokens": 22,
+      "max_tokens": 22
+    }
+  },
+  "per_task": [
+    {
+      "task": "multi_turn_long_context_100",
+      "tool_output_tokens": 7965,
+      "user_tokens": 119,
+      "min_final_context": 11085,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_101",
+      "tool_output_tokens": 8006,
+      "user_tokens": 122,
+      "min_final_context": 11129,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_103",
+      "tool_output_tokens": 11610,
+      "user_tokens": 173,
+      "min_final_context": 14784,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_104",
+      "tool_output_tokens": 9923,
+      "user_tokens": 172,
+      "min_final_context": 13096,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_105",
+      "tool_output_tokens": 11974,
+      "user_tokens": 54,
+      "min_final_context": 15029,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_107",
+      "tool_output_tokens": 9622,
+      "user_tokens": 147,
+      "min_final_context": 12770,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_108",
+      "tool_output_tokens": 11591,
+      "user_tokens": 194,
+      "min_final_context": 14786,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_111",
+      "tool_output_tokens": 1757,
+      "user_tokens": 164,
+      "min_final_context": 4922,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_113",
+      "tool_output_tokens": 17871,
+      "user_tokens": 73,
+      "min_final_context": 20945,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_114",
+      "tool_output_tokens": 10003,
+      "user_tokens": 110,
+      "min_final_context": 13114,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_115",
+      "tool_output_tokens": 9532,
+      "user_tokens": 79,
+      "min_final_context": 12612,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_116",
+      "tool_output_tokens": 13977,
+      "user_tokens": 170,
+      "min_final_context": 17148,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_117",
+      "tool_output_tokens": 13969,
+      "user_tokens": 191,
+      "min_final_context": 17161,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_118",
+      "tool_output_tokens": 11571,
+      "user_tokens": 148,
+      "min_final_context": 14720,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_120",
+      "tool_output_tokens": 9581,
+      "user_tokens": 52,
+      "min_final_context": 12634,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_121",
+      "tool_output_tokens": 13612,
+      "user_tokens": 105,
+      "min_final_context": 16718,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_122",
+      "tool_output_tokens": 1643,
+      "user_tokens": 129,
+      "min_final_context": 4773,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_123",
+      "tool_output_tokens": 9662,
+      "user_tokens": 88,
+      "min_final_context": 12751,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_126",
+      "tool_output_tokens": 11518,
+      "user_tokens": 164,
+      "min_final_context": 14683,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_127",
+      "tool_output_tokens": 11544,
+      "user_tokens": 94,
+      "min_final_context": 14639,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_128",
+      "tool_output_tokens": 13575,
+      "user_tokens": 145,
+      "min_final_context": 16721,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_130",
+      "tool_output_tokens": 1699,
+      "user_tokens": 160,
+      "min_final_context": 4860,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_131",
+      "tool_output_tokens": 13628,
+      "user_tokens": 156,
+      "min_final_context": 16785,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_132",
+      "tool_output_tokens": 9532,
+      "user_tokens": 56,
+      "min_final_context": 12589,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_135",
+      "tool_output_tokens": 15527,
+      "user_tokens": 87,
+      "min_final_context": 18615,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_137",
+      "tool_output_tokens": 9964,
+      "user_tokens": 176,
+      "min_final_context": 13141,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_138",
+      "tool_output_tokens": 9634,
+      "user_tokens": 169,
+      "min_final_context": 12804,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_141",
+      "tool_output_tokens": 11590,
+      "user_tokens": 203,
+      "min_final_context": 14794,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_142",
+      "tool_output_tokens": 9986,
+      "user_tokens": 119,
+      "min_final_context": 13106,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_143",
+      "tool_output_tokens": 1709,
+      "user_tokens": 195,
+      "min_final_context": 4905,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_145",
+      "tool_output_tokens": 9633,
+      "user_tokens": 167,
+      "min_final_context": 12801,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_146",
+      "tool_output_tokens": 11555,
+      "user_tokens": 76,
+      "min_final_context": 14632,
+      "tool_output_tiktoken": null
+    },
+    {
+      "task": "multi_turn_long_context_149",
+      "tool_output_tokens": 2093,
+      "user_tokens": 182,
+      "min_final_context": 5276,
+      "tool_output_tiktoken": null
+    }
+  ]
+}
