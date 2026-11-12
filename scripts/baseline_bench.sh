@@ -80,7 +80,7 @@ echo "[$(date +%T)] memory bandwidth..."
 if command -v sysbench >/dev/null; then
   for th in 1 4; do
     echo "=== read, $th thread(s) ===" >> "$OUT/bandwidth.txt"
-    sysbench memory --memory-block-size=1M --memory-total-size=20G \
+    sysbench memory --memory-block-size=512M --memory-total-size=40G \
       --memory-oper=read --threads=$th run >> "$OUT/bandwidth.txt" 2>&1
   done
 else

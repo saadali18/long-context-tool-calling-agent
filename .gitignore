@@ -1,0 +1,4 @@
+.DS_Store
+third_party/
+*.gguf
+__pycache__/
