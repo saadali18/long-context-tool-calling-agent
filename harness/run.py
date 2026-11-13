@@ -5,6 +5,9 @@ Baseline (spec Task 3): stateless client, prompt cache off, all tool schemas, no
   python -m harness.run --bfcl-root third_party/gorilla/berkeley-function-call-leaderboard \
       --split splits/tasks_TradingBot_MessageAPI.json --which test --out results/harness_baseline
 
+Add our own long tasks with --extra-tasks data/long_tasks.jsonl. With --split, only the
+long tasks listed under the chosen group ("extra_test" / "extra_trace") are run.
+
 Outputs in --out: metadata.json, requests.jsonl (one line per model request),
 sessions.jsonl (one line per task). Summarise with `python -m harness.summarize <out>`.
 """
@@ -40,6 +43,43 @@ def load_extra_tasks(path: str) -> dict[str, Task]:
     return out
 
 
+def select_ids(a, tasks: dict, extra: dict, classes: list[str]) -> list[str]:
+    """Which task ids to run.
+
+    --ids     runs exactly the listed ids (BFCL or extra); nothing is added.
+    --split   runs the chosen group (--which test|trace|all). BFCL ids come from the
+              split's "test"/"trace" lists, extra-task ids from "extra_test"/"extra_trace".
+              Every extra task must be assigned to one of the two, so a test task can
+              never slip into a trace (tuning) run.
+    neither   runs every BFCL task in the tool subset, plus every extra task.
+    """
+    if a.ids:
+        ids = [i.strip() for i in a.ids.split(",") if i.strip()]
+    elif a.split:
+        sp = json.load(open(a.split))
+        if sp["classes"] != classes:
+            sys.exit(f"--classes {classes} does not match the split's {sp['classes']}")
+        groups = ["test", "trace"] if a.which == "all" else [a.which]
+        ids = [i for g in groups for i in sp[g]]
+        if extra:
+            ex_test, ex_trace = set(sp.get("extra_test", [])), set(sp.get("extra_trace", []))
+            both = sorted(ex_test & ex_trace)
+            if both:
+                sys.exit(f"extra tasks {both} are in both extra_test and extra_trace of {a.split}")
+            unassigned = sorted(set(extra) - ex_test - ex_trace)
+            if unassigned:
+                sys.exit(f"extra tasks {unassigned} are not assigned to extra_test or extra_trace in {a.split}")
+            ids += [i for g in groups for i in sp.get(f"extra_{g}", []) if i in extra]
+    else:
+        ids = sorted((t.id for t in tasks.values() if t.id not in extra and set(t.involved_classes) <= set(classes)),
+                     key=lambda s: int(s.rsplit("_", 1)[1]))
+        ids += list(extra)
+    unknown = [i for i in ids if i not in tasks]
+    if unknown:
+        sys.exit(f"unknown task ids {unknown} (an extra task needs --extra-tasks)")
+    return ids
+
+
 def long_context_lists() -> dict:
     """Lengths of BFCL's long-context filler lists and the A1 cap, if applied (scripts/cap_long_context.py)."""
     import importlib
@@ -65,7 +105,7 @@ def main():
     ap.add_argument("--split", help="file from harness.make_split")
     ap.add_argument("--which", default="test", choices=["test", "trace", "all"])
     ap.add_argument("--ids", help="comma-separated task ids (overrides --split)")
-    ap.add_argument("--extra-tasks", help="JSONL of our own long tasks (added to the run; with --ids, only listed ones)")
+    ap.add_argument("--extra-tasks", help="JSONL of our own long tasks; with --split, only those in the chosen extra_test/extra_trace group run")
     ap.add_argument("--limit", type=int, help="run only the first N tasks")
     ap.add_argument("--max-turns", type=int, help="truncate each session to N user turns (Pi latency runs)")
     ap.add_argument("--server-url", default="http://127.0.0.1:8080")
@@ -84,21 +124,9 @@ def main():
     bfcl = BFCL(a.bfcl_root)
     tasks = bfcl.load_tasks()
 
-    if a.ids:
-        ids = a.ids.split(",")
-    elif a.split:
-        sp = json.load(open(a.split))
-        if sp["classes"] != classes:
-            sys.exit(f"--classes {classes} does not match the split's {sp['classes']}")
-        ids = sp["test"] + sp["trace"] if a.which == "all" else sp[a.which]
-    else:
-        ids = sorted((t.id for t in tasks.values() if set(t.involved_classes) <= set(classes)),
-                     key=lambda s: int(s.rsplit("_", 1)[1]))
-    if a.extra_tasks:
-        extra = load_extra_tasks(a.extra_tasks)
-        tasks.update(extra)
-        if not a.ids:  # with --ids, only the listed ids run (they may name our own tasks)
-            ids += list(extra)
+    extra = load_extra_tasks(a.extra_tasks) if a.extra_tasks else {}
+    tasks.update(extra)
+    ids = select_ids(a, tasks, extra, classes)
     if a.limit:
         ids = ids[: a.limit]
     for i in ids:

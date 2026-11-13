@@ -42,5 +42,16 @@
     "multi_turn_long_context_141",
     "multi_turn_long_context_142",
     "multi_turn_long_context_149"
-  ]
+  ],
+  "extra_test": [
+    "a1_long_context_1",
+    "a1_long_context_2",
+    "a1_long_context_3",
+    "a1_long_context_4",
+    "a1_long_context_6"
+  ],
+  "extra_trace": [
+    "a1_long_context_5"
+  ],
+  "extra_note": "Our long tasks (data/long_tasks.jsonl). L5 is in trace so tuning sees one long task; the other five are held out."
 }

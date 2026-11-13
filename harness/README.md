@@ -62,7 +62,7 @@ python3 -m harness.summarize results/harness_baseline_test
 ```
 
 - **Cold start:** add `--launch-server "<the full llama-server command>"`. The harness starts the server itself and reports `cold_time_to_first_call_ms` for the first task.
-- **Our own long tasks:** `--extra-tasks tasks/long_tasks.jsonl`, one JSON object per line with `id`, `question` (a list of turns, each a list of `{"role":"user","content":...}`), `initial_config`, `involved_classes` and `ground_truth` (a list of call strings per turn, e.g. `"get_watchlist()"`). Success is the same end-state check as BFCL.
+- **Our own long tasks:** `--extra-tasks tasks/long_tasks.jsonl`, one JSON object per line with `id`, `question` (a list of turns, each a list of `{"role":"user","content":...}`), `initial_config`, `involved_classes` and `ground_truth` (a list of call strings per turn, e.g. `"get_watchlist()"`). Success is the same end-state check as BFCL. With `--split`, a long task runs only if its id is listed under `extra_test` or `extra_trace` in the split file, in the group chosen by `--which`; an unassigned long task stops the run with an error.
 - **Optimised runs later:** the same command with `--cache-prompt`, a different model file, or a different server build. Compare with `summarize`.
 
 ## How it scores
