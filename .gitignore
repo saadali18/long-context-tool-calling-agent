@@ -1,12 +1,9 @@
-# Python
+.DS_Store
+third_party/
+*.gguf
 __pycache__/
-*.pyc
-*.egg-info/
-.venv/
-.pytest_cache/
 
-# Run outputs (keep the folders, not the files)
+
+models/*
 outputs/*
-!outputs/.gitkeep
-
-models/
+results/*
