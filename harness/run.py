@@ -65,7 +65,7 @@ def main():
     ap.add_argument("--split", help="file from harness.make_split")
     ap.add_argument("--which", default="test", choices=["test", "trace", "all"])
     ap.add_argument("--ids", help="comma-separated task ids (overrides --split)")
-    ap.add_argument("--extra-tasks", help="JSONL of our own long tasks (added to the run)")
+    ap.add_argument("--extra-tasks", help="JSONL of our own long tasks (added to the run; with --ids, only listed ones)")
     ap.add_argument("--limit", type=int, help="run only the first N tasks")
     ap.add_argument("--max-turns", type=int, help="truncate each session to N user turns (Pi latency runs)")
     ap.add_argument("--server-url", default="http://127.0.0.1:8080")
@@ -97,7 +97,8 @@ def main():
     if a.extra_tasks:
         extra = load_extra_tasks(a.extra_tasks)
         tasks.update(extra)
-        ids += list(extra)
+        if not a.ids:  # with --ids, only the listed ids run (they may name our own tasks)
+            ids += list(extra)
     if a.limit:
         ids = ids[: a.limit]
     for i in ids:

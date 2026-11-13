@@ -1,6 +1,6 @@
 # Long-session tasks (Task 1) and long-context list cap
 
-Author: Eman Fatima · Branch: `long-tasks` · Benchmark: `bfcl-eval==2026.3.23` · Tokenizer: Qwen3-1.7B (`tokenizer.json`)
+Author: Eman Fatima · Branch: `long-tasks` · Benchmark: BFCL from GitHub, commit `6ea5797` (`third_party/gorilla`) · Tokenizer: Qwen3-1.7B (`tokenizer.json`)
 
 ## What the project asks for (Task 1)
 
@@ -10,7 +10,7 @@ from **early in the session**. A test split is held out (still to do, together w
 
 ## Real token counts and the list cap
 
-`scripts/count_tokens.py` re-counts a finished run with the Qwen3 tokenizer. Estimating tokens
+`scripts/count_tool_tokens.py --extra-tasks data/long_tasks.jsonl` counts the tool outputs of these tasks with the Qwen3 tokenizer. Estimating tokens
 as characters ÷ 4 badly underestimates these sessions: the long-context outputs are mostly
 numbers, and Qwen splits every digit into its own token (≈1.3–1.5 characters per token).
 
@@ -40,12 +40,12 @@ Why it is safe (from `trading_bot.py`):
 | Over 32k tokens | 28 | 0 |
 | Over 16k tokens | 28 | 7 |
 
-**Every environment that runs BFCL's tools must carry the same cap** (this repo's `.venv`,
-which BFCL's checker uses, and the agent's tool environment). Run once after installing bfcl-eval:
+**Every copy of BFCL that runs the tools must carry the same cap.** The harness and the
+official scorer both use `third_party/gorilla`, so one run of the cap script covers both:
 
 ```bash
-pip install --no-deps bfcl-eval==2026.3.23
-python scripts/cap_long_context.py      # appends the cap block; backup kept as long_context.py.orig
+python3 scripts/cap_long_context.py --cap 500      # appends the cap block to long_context.py
+python3 scripts/cap_long_context.py --status       # check it
 ```
 
 ## The long tasks (`data/long_tasks.jsonl`)
@@ -85,13 +85,17 @@ and tool outputs; the chat template adds a few tokens per message on top.
 ## Reproduce
 
 ```bash
-source .venv/bin/activate
-python scripts/cap_long_context.py                                   # once per environment
-python scripts/run_bfcl.py --caller ground_truth --tasks extra --name gt_long6
-python scripts/count_tokens.py outputs/gt_long6                      # needs models/qwen3-tokenizer/tokenizer.json
+B=third_party/gorilla/berkeley-function-call-leaderboard
+python3 scripts/cap_long_context.py --cap 500                        # once per BFCL copy
+python3 -m pytest tests -k long_tasks                                # ground-truth replay, both scorers
+python3 scripts/count_tool_tokens.py --bfcl-root $B --tokenizer models/qwen3-tokenizer/tokenizer.json \
+    --extra-tasks data/long_tasks.jsonl --only-extra
+# with a model (llama-server running):
+python3 -m harness.run --bfcl-root $B --ids a1_long_context_1 --extra-tasks data/long_tasks.jsonl --out results/long_tasks
+python3 -m harness.official_score results/long_tasks --bfcl-root $B --extra-tasks data/long_tasks.jsonl
 ```
 
 Tokenizer setup (once): `pip install tokenizers huggingface_hub` and
 `hf download Qwen/Qwen3-1.7B tokenizer.json --local-dir models/qwen3-tokenizer`.
 
-`run_bfcl.py --tasks` selects `all` (BFCL + ours, default), `bfcl` or `extra` (ours only).
+`harness.run --extra-tasks` adds all six tasks after the BFCL ones; with `--ids` only the listed ids run (BFCL's or ours).

@@ -2,8 +2,7 @@
 third_party/
 *.gguf
 __pycache__/
-
-
-models/*
-outputs/*
-results/*
+.venv/
+outputs/
+.pytest_cache/
+models/
