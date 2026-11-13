@@ -42,5 +42,17 @@
     "multi_turn_long_context_141",
     "multi_turn_long_context_142",
     "multi_turn_long_context_149"
-  ]
+  ],
+  "extra_tasks": {
+    "test": [
+      "a1_long_context_1",
+      "a1_long_context_2",
+      "a1_long_context_3",
+      "a1_long_context_5",
+      "a1_long_context_6"
+    ],
+    "trace": [
+      "a1_long_context_4"
+    ]
+  }
 }
