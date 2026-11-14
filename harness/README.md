@@ -69,6 +69,8 @@ python3 -m harness.summarize results/harness_baseline_test
 
 After every user turn, the harness runs that turn's ground-truth calls on a second copy of the backends. A turn passes when (1) the backends involved have the same public state as the ground-truth copy, and (2) every ground-truth result appears among the model's results so far. That is BFCL's `multi_turn_checker` logic. A session succeeds only if every turn passes.
 
+The same run can be scored a second time with BFCL's own, unchanged code (see [Official BFCL scorer](#official-bfcl-scorer)), so the two can be compared.
+
 Unlike BFCL, it keeps scoring after the first failed turn, so `per_turn_accuracy` and `turn_accuracy_by_index` show where sessions start failing. After a failure the backend state has diverged, so later turns mostly fail too. Measuring single-turn accuracy cleanly, for the gap experiment, needs a teacher-forced mode (reset to the ground-truth state and history before each turn). That mode is not built yet.
 
 ## Scale on the Pi (BF16 baseline)
@@ -84,6 +86,31 @@ Replaying the ground truth through the harness gives these sizes, estimated at a
 
 So the full baseline test split cannot run on the Pi in BF16. Measure latency on the Pi with `--limit`/`--max-turns`, and run accuracy elsewhere with identical weights, which the spec allows.
 
+## Official BFCL scorer
+
+`harness/official_score.py` re-scores a finished run folder with BFCL's original checker code, loaded from the same `--bfcl-root` (so the same commit and the same list cap):
+
+```bash
+python3 -m harness.official_score results/harness_baseline_test --bfcl-root $B
+# runs that used --extra-tasks:
+python3 -m harness.official_score <run_dir> --bfcl-root $B --extra-tasks data/long_tasks.jsonl
+```
+
+| Argument | What it does |
+| --- | --- |
+| `run_dir` | Folder written by `harness.run` (reads `requests.jsonl` and `sessions.jsonl`). |
+| `--bfcl-root` | BFCL folder (`berkeley-function-call-leaderboard`). Required. |
+| `--extra-tasks` | Our own task file, when the run used `--extra-tasks`. |
+
+- **Session success:** BFCL's `multi_turn_checker`, exactly as the leaderboard runs it (stops at the first failed turn).
+- **Per-turn accuracy:** BFCL's `state_checker` and `response_checker` after every turn, without stopping.
+- The model's calls are rebuilt from `requests.jsonl` as BFCL call strings. Only calls with valid JSON arguments, a name from the task's tools and plain argument names are kept, because BFCL runs them with `eval`. Steps without a kept call are left out, as BFCL does.
+- An aborted session, or a turn that used all 20 steps, fails as `multi_turn:force_terminated`. A `--max-turns` run is scored on the turns that were played.
+
+It writes `official_scores.jsonl` into the run folder (one line per task: official and harness results side by side, the rebuilt calls, and `agree`) and prints both session success rates, both per-turn accuracies and any task where they disagree.
+
+Checked so far: the four mock modes (13 test tasks each) and `results/harness_bf16_143_full` / `_t1` give identical session and per-turn results under both scorers.
+
 ## Tests
 
 `tests/mock_server.py` imitates llama-server and replays the ground truth, in four modes:
@@ -94,6 +121,15 @@ So the full baseline test split cannot run on the Pi in BF16. Measure latency on
 | `noisy` | invalid calls counted (`call_validity` < 1); sessions still succeed |
 | `silent` | `empty_turn_model_response` failures |
 | `wrong` | state or response mismatches from turn 1 |
+
+`tests/run_mock_tests.sh` also runs the official scorer on each mode; the last line must be `"disagreements": []`.
+
+`tests/test_bfcl.py` (pytest) drives `harness.runner.run_session` with an in-process fake server and scores every session with both scorers. It checks the split (30 tools, 13 test / 20 trace tasks, no overlap), JSON Schema types, that long-context outputs are longer, that the ground truth passes both scorers on every test task and on `data/long_tasks.jsonl`, that a silent model fails, that both scorers agree when arguments are wrong, that `--max-turns` runs are scored on the played turns, and that unsafe calls never reach `eval`.
+
+```bash
+pip install pytest                      # the only package needed, for the tests only
+BFCL_ROOT=$B python3 -m pytest tests    # BFCL_ROOT defaults to the path above
+```
 
 ## Limitations
 
