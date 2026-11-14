@@ -1,0 +1,76 @@
+=== read, 1 thread(s) ===
+sysbench 1.0.20 (using system LuaJIT 2.1.1723681758)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Running memory speed test with the following options:
+  block size: 1024KiB
+  total size: 20480MiB
+  operation: read
+  scope: global
+
+Initializing worker threads...
+
+Threads started!
+
+Total operations: 20480 (26600.52 per second)
+
+20480.00 MiB transferred (26600.52 MiB/sec)
+
+
+General statistics:
+    total time:                          0.7688s
+    total number of events:              20480
+
+Latency (ms):
+         min:                                    0.04
+         avg:                                    0.04
+         max:                                    0.08
+         95th percentile:                        0.04
+         sum:                                  764.85
+
+Threads fairness:
+    events (avg/stddev):           20480.0000/0.00
+    execution time (avg/stddev):   0.7649/0.00
+
+=== read, 4 thread(s) ===
+sysbench 1.0.20 (using system LuaJIT 2.1.1723681758)
+
+Running the test with following options:
+Number of threads: 4
+Initializing random number generator from current time
+
+
+Running memory speed test with the following options:
+  block size: 1024KiB
+  total size: 20480MiB
+  operation: read
+  scope: global
+
+Initializing worker threads...
+
+Threads started!
+
+Total operations: 20480 (69743.11 per second)
+
+20480.00 MiB transferred (69743.11 MiB/sec)
+
+
+General statistics:
+    total time:                          0.2926s
+    total number of events:              20480
+
+Latency (ms):
+         min:                                    0.04
+         avg:                                    0.06
+         max:                                    0.29
+         95th percentile:                        0.06
+         sum:                                 1164.39
+
+Threads fairness:
+    events (avg/stddev):           5120.0000/0.00
+    execution time (avg/stddev):   0.2911/0.00
+

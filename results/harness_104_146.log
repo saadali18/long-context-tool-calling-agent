@@ -1,0 +1,5 @@
+nohup: ignoring input
+[09:32:41] 1/2 multi_turn_long_context_104
+    success=False turns_passed=0/2 calls_valid=3/3 wall=11317s
+[12:41:18] 2/2 multi_turn_long_context_146
+    success=False turns_passed=0/4 calls_valid=3/3 wall=16175s

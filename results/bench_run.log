@@ -1,0 +1,16 @@
+nohup: ignoring input
+Results -> /home/edge_maria/long-context-tool-calling-agent/results/baseline_20261106_1512
+[15:13:06] memory breakdown...
+[15:13:12] memory bandwidth...
+[15:13:13] throughput at depths 0,2048,8192 ...
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| qwen3 1.7B BF16                |   3.78 GiB |     2.03 B | CPU        |       4 |            pp64 |          1.40 ± 0.00 |
+| qwen3 1.7B BF16                |   3.78 GiB |     2.03 B | CPU        |       4 |            tg16 |          1.11 ± 0.00 |
+| qwen3 1.7B BF16                |   3.78 GiB |     2.03 B | CPU        |       4 |    pp64 @ d2048 |          1.44 ± 0.00 |
+| qwen3 1.7B BF16                |   3.78 GiB |     2.03 B | CPU        |       4 |    tg16 @ d2048 |          1.00 ± 0.00 |
+| qwen3 1.7B BF16                |   3.78 GiB |     2.03 B | CPU        |       4 |    pp64 @ d8192 |          1.39 ± 0.00 |
+| qwen3 1.7B BF16                |   3.78 GiB |     2.03 B | CPU        |       4 |    tg16 @ d8192 |          0.71 ± 0.00 |
+
+build: efbf6e80a (12115)
+[17:17:56] done -> /home/edge_maria/long-context-tool-calling-agent/results/baseline_20261106_1512
