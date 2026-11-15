@@ -13,6 +13,9 @@ Differences from BFCL's own code, on purpose:
 
 from __future__ import annotations
 
+import logging
+from .debug_log import trace
+
 import ast
 import copy
 import importlib
@@ -32,6 +35,7 @@ _TYPE_MAP = {
 DATASET = "BFCL_v4_multi_turn_long_context.json"
 STATELESS = {"MathAPI"}
 MAX_STEPS_PER_TURN = 20  # BFCL's MAXIMUM_STEP_LIMIT
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,6 +52,7 @@ class Task:
 class BFCL:
     """Access to one BFCL checkout (berkeley-function-call-leaderboard folder)."""
 
+    @trace
     def __init__(self, root: str | Path):
         self.root = Path(root).resolve()
         if not (self.root / "bfcl_eval").is_dir():
@@ -60,6 +65,7 @@ class BFCL:
         self.data = self.root / "bfcl_eval" / "data"
 
     # ---------- tasks ----------
+    @trace
     def load_tasks(self) -> dict[str, Task]:
         gt = {}
         for line in open(self.data / "possible_answer" / DATASET):
@@ -73,13 +79,16 @@ class BFCL:
                 involved_classes=r["involved_classes"], ground_truth=gt[r["id"]],
                 excluded_functions=r.get("excluded_function", []),
             )
+        log.info('bfcl_tasks_loaded count=%d',len(tasks))
         return tasks
 
     # ---------- tool schemas ----------
+    @trace
     def func_docs(self, class_name: str) -> list[dict]:
         path = self.data / "multi_turn_func_doc" / self.doc_file[class_name]
         return [json.loads(line) for line in open(path)]
 
+    @trace
     def tools_for(self, classes: list[str], excluded: list[str] = ()) -> list[dict]:
         """OpenAI-style tool list for the given classes (BFCL-equivalent conversion)."""
         tools = []
@@ -96,6 +105,7 @@ class BFCL:
         return tools
 
     # ---------- backends ----------
+    @trace
     def new_instances(self, classes: list[str], initial_config: dict) -> dict:
         """Fresh backend objects in long-context mode, loaded with the task's scenario."""
         out = {}
@@ -108,6 +118,7 @@ class BFCL:
         return out
 
 
+@trace
 def _cast_types(props: dict) -> dict:
     for key, val in props.items():
         t = val.get("type", "string")
@@ -129,6 +140,7 @@ def _cast_types(props: dict) -> dict:
 
 
 # ---------- executing calls ----------
+@trace
 def method_owner(instances: dict) -> dict:
     """public method name -> backend object (raises on a name clash)."""
     owner = {}
@@ -142,6 +154,7 @@ def method_owner(instances: dict) -> dict:
     return owner
 
 
+@trace
 def _to_text(result) -> str:
     # same conversion as BFCL's execute_multi_turn_func_call
     if isinstance(result, str):
@@ -157,18 +170,23 @@ def _to_text(result) -> str:
 BLOCKED = {"kill", "exit", "quit", "remove", "unlink", "popen", "Popen", "run"}
 
 
+@trace
 def execute(owner: dict, name: str, kwargs: dict) -> str:
     if name in BLOCKED:
+        log.warning("blocked_tool name=%s",name)
         return f"Error during execution: Function call {name} is not allowed."
     obj = owner.get(name)
     if obj is None:
+        log.warning("unknown_tool name=%s",name)
         return f"Error during execution: name '{name}' is not defined"
     try:
         return _to_text(getattr(obj, name)(**kwargs))
     except Exception as e:  # noqa: BLE001 - BFCL returns the error text to the model
+        log.warning("tool_exception name=%s type=%s",name,type(e).__name__)
         return f"Error during execution: {e}"
 
 
+@trace
 def parse_call_string(call: str, owner: dict) -> tuple[str, dict]:
     """'get_stock_info(symbol="X")' or "get_stock_info('X')" -> (name, kwargs). No eval."""
     node = ast.parse(call.strip(), mode="eval").body
@@ -187,6 +205,7 @@ def parse_call_string(call: str, owner: dict) -> tuple[str, dict]:
 
 
 # ---------- validity of a model call ----------
+@trace
 def check_call(tools_by_name: dict, name: str, raw_args) -> dict:
     """Spec's call validity: well formed, existing tool, schema-valid arguments."""
     res = {"name": name, "well_formed": True, "exists": True, "schema_valid": True, "problems": []}
@@ -222,6 +241,7 @@ def check_call(tools_by_name: dict, name: str, raw_args) -> dict:
     return res
 
 
+@trace
 def _type_ok(v, spec: dict) -> bool:
     t = spec.get("type")
     if v is None:
@@ -240,10 +260,12 @@ def _type_ok(v, spec: dict) -> bool:
 
 
 # ---------- scoring (BFCL multi_turn_checker logic) ----------
+@trace
 def public_state(obj) -> dict:
     return {k: v for k, v in vars(obj).items() if not k.startswith("_")}
 
 
+@trace
 def state_matches(model_obj, gt_obj) -> tuple[bool, dict]:
     diffs = {}
     for k in vars(gt_obj):
@@ -254,6 +276,7 @@ def state_matches(model_obj, gt_obj) -> tuple[bool, dict]:
     return not diffs, diffs
 
 
+@trace
 def responses_contained(gt_results: list, model_results_so_far: list) -> list:
     """Return GT results missing from the model's results (unordered, with multiplicity)."""
     pool = list(model_results_so_far)

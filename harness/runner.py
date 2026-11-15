@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+from .debug_log import trace
+
 import json
 import time
 
 from . import bfcl_env as env
 from .llm_client import LlamaServer, ServerError
+
+log = logging.getLogger(__name__)
 
 BFCL_MULTITURN_HINT = (
     "At each turn, you should try your best to complete the tasks requested by the user within "
@@ -16,9 +21,11 @@ BFCL_MULTITURN_HINT = (
 )
 
 
+@trace
 def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: list[str], cfg: dict,
                 log_request, monitor=None) -> dict:
     """Run one task end to end. `log_request(dict)` is called after every model request."""
+    log.info("session_start task=%s turns=%d cache=%s",task.id,len(task.turns),cfg.get("cache_prompt"))
     tools = bfcl.tools_for(classes, task.excluded_functions)
     tools_by_name = {t["function"]["name"]: t for t in tools}
     model_inst = bfcl.new_instances(classes, task.initial_config)
@@ -41,15 +48,18 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
     max_context = 0
 
     for ti in range(n_turns):
+        log.info('turn_start task=%s turn=%d/%d',task.id,ti+1,n_turns)
         messages.extend(task.turns[ti])
         t_turn = time.monotonic()
         turn_calls = 0
         for step in range(env.MAX_STEPS_PER_TURN):
+            log.info('request_start task=%s turn=%d step=%d messages=%d',task.id,ti,step,len(messages))
             try:
                 out = server.chat(messages, tools, temperature=cfg["temperature"],
                                   max_tokens=cfg["max_tokens"], cache_prompt=cfg["cache_prompt"],
                                   enable_thinking=cfg["thinking"], seed=cfg.get("seed", 0))
             except ServerError as e:
+                log.error("request_error task=%s turn=%d step=%d type=%s",task.id,ti,step,type(e).__name__)
                 aborted = f"server_error: {e}"[:500]
                 break
             n_req += 1
@@ -74,6 +84,7 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
                 "content": content[:2000],
                 "calls": [],
             }
+            log.info("request_finish task=%s turn=%d step=%d wall_ms=%.1f prompt=%s cached=%s prefill_ms=%s decode_ms=%s tool_calls=%d",task.id,ti,step,rec["request_wall_ms"],prompt_tokens,rec["cached_tokens"],rec["prefill_ms"],rec["decode_ms"],len(tool_calls))
             max_context = max(max_context, prompt_tokens or 0)
 
             assistant = {"role": "assistant", "content": content}
@@ -82,6 +93,7 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
             messages.append(assistant)
 
             if not tool_calls and "<tool_call>" in content:
+                log.warning("unparsed_tool_call task=%s turn=%d step=%d",task.id,ti,step)
                 # the model tried to call a tool but the server could not parse it
                 rec["calls"].append({"name": None, "well_formed": False, "exists": False,
                                      "schema_valid": False, "problems": ["unparsed <tool_call> text"]})
@@ -90,6 +102,7 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
             for k, tc in enumerate(tool_calls):
                 fn = tc.get("function", {})
                 v = env.check_call(tools_by_name, fn.get("name"), fn.get("arguments", "{}"))
+                log.info("tool_start task=%s turn=%d step=%d name=%s valid=%s",task.id,ti,step,fn.get("name"),v["schema_valid"])
                 t0 = time.monotonic()
                 if v["well_formed"]:
                     result = env.execute(model_owner, fn.get("name"), v["args"])
@@ -102,6 +115,7 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
                 turn_calls += 1
                 v.update(tool_ms=round(dt, 2), result_chars=len(result))
                 rec["calls"].append(v)
+                log.info("tool_finish task=%s turn=%d step=%d name=%s elapsed_ms=%.1f result_chars=%d",task.id,ti,step,fn.get("name"),dt,len(result))
                 messages.append({"role": "tool", "tool_call_id": tc.get("id") or f"call_{ti}_{step}_{k}",
                                  "content": result})
             rec["tool_ms"] = round(tool_ms, 2)
@@ -147,6 +161,7 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
             else:
                 turn.update(passed=True)
         turns.append(turn)
+        log.info("turn_finish task=%s turn=%d passed=%s reason=%s wall_ms=%.1f",task.id,ti,turn["passed"],turn.get("reason"),turn["wall_ms"])
         if aborted:
             break
 
@@ -175,12 +190,15 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
     }
     if monitor is not None:
         session.update(monitor.summary(t_session, time.monotonic()))
+    log.info("session_finish task=%s success=%s requests=%d wall_ms=%.1f",task.id,session["session_success"],n_req,wall_ms)
     return session
 
 
+@trace
 def jsonl_writer(path):
     f = open(path, "a", buffering=1)
 
+    @trace
     def write(rec):
         f.write(json.dumps(rec, default=str) + "\n")
     return write, f

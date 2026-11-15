@@ -42,6 +42,9 @@ scorers side by side.
 
 from __future__ import annotations
 
+import logging
+from .debug_log import trace
+
 import argparse
 import importlib
 import json
@@ -54,6 +57,7 @@ from .bfcl_env import BFCL, Task
 from .run import load_extra_tasks
 
 
+@trace
 def to_call_string(name: str, args: dict) -> str:
     """Write one call in the Python-call text form that BFCL runs and checks.
 
@@ -64,6 +68,7 @@ def to_call_string(name: str, args: dict) -> str:
     return f"{name}({','.join(f'{k}={v!r}' for k, v in args.items())})"
 
 
+@trace
 def task_tool_names(bfcl: BFCL, task: Task) -> set[str]:
     """Names of the tools a task may call: the tools of its own backends, minus excluded ones.
 
@@ -73,6 +78,7 @@ def task_tool_names(bfcl: BFCL, task: Task) -> set[str]:
     return {t["function"]["name"] for t in bfcl.tools_for(task.involved_classes, task.excluded_functions)}
 
 
+@trace
 def rebuild_model_calls(requests: list[dict], n_turns: int, allowed: set[str]) -> list[list[list[str]]]:
     """Turn a session's request records back into BFCL's turn -> step -> call-string list.
 
@@ -99,6 +105,7 @@ def rebuild_model_calls(requests: list[dict], n_turns: int, allowed: set[str]) -
     return [by_turn[t] for t in range(n_turns)]
 
 
+@trace
 def hit_step_limit(requests: list[dict]) -> bool:
     """True when some turn used all 20 steps and the model was still calling tools.
 
@@ -118,10 +125,12 @@ class OfficialChecker:
     exactly the same BFCL copy (and the same long-context list cap) as the harness run.
     """
 
+    @trace
     def __init__(self):
         self.checker = importlib.import_module("bfcl_eval.eval_checker.multi_turn_eval.multi_turn_checker")
         self.utils = importlib.import_module("bfcl_eval.eval_checker.multi_turn_eval.multi_turn_utils")
 
+    @trace
     def _release(self, prefix: str) -> None:
         """Delete the backend objects BFCL kept in memory under names starting with `prefix`.
 
@@ -132,6 +141,7 @@ class OfficialChecker:
         for key in [k for k in vars(self.utils) if k.startswith(prefix)]:
             del vars(self.utils)[key]
 
+    @trace
     def session(self, task: Task, model_calls: list[list[list[str]]]) -> dict:
         """Run BFCL's `multi_turn_checker` on one session.
 
@@ -149,6 +159,7 @@ class OfficialChecker:
         finally:
             self._release(name)
 
+    @trace
     def per_turn(self, task: Task, model_calls: list[list[list[str]]]) -> list[bool]:
         """Check every played turn with BFCL's own `state_checker` and `response_checker`.
 
@@ -188,6 +199,10 @@ class OfficialChecker:
         return flags
 
 
+log = logging.getLogger(__name__)
+
+
+@trace
 def score_session(checker: OfficialChecker, bfcl: BFCL, task: Task, session: dict, requests: list[dict]) -> dict:
     """Score one harness session with BFCL's code and put both scorers' results side by side.
 
@@ -229,14 +244,17 @@ def score_session(checker: OfficialChecker, bfcl: BFCL, task: Task, session: dic
         "model_calls": model_calls,
     }
     result["agree"] = (official["valid"] == session["session_success"] and turns == harness_turns)
+    log.info("score_finish task=%s official=%s harness=%s agree=%s",task.id,official["valid"],session["session_success"],result["agree"])
     return result
 
 
+@trace
 def _read_jsonl(path: Path) -> list[dict]:
     """Read a JSON Lines file into a list of dicts (empty lines skipped)."""
     return [json.loads(line) for line in open(path) if line.strip()]
 
 
+@trace
 def score_run(run_dir: str | Path, bfcl_root: str | Path, extra_tasks: str | None = None) -> list[dict]:
     """Score every session of a harness run folder with BFCL's code.
 
@@ -248,6 +266,7 @@ def score_run(run_dir: str | Path, bfcl_root: str | Path, extra_tasks: str | Non
     Returns:
         One result per session (see `score_session`), in sessions.jsonl order.
     """
+    log.info("score_run_start with_custom_tasks=%s",bool(extra_tasks))
     run_dir = Path(run_dir)
     bfcl = BFCL(bfcl_root)
     tasks = bfcl.load_tasks()
@@ -262,8 +281,10 @@ def score_run(run_dir: str | Path, bfcl_root: str | Path, extra_tasks: str | Non
             for s in _read_jsonl(run_dir / "sessions.jsonl")]
 
 
+@trace
 def compare(results: list[dict]) -> dict:
     """Add up both scorers over a run: session success rate, per-turn accuracy and agreement."""
+    @trace
     def rate(values):
         return round(sum(values) / len(values), 4) if values else None
 
@@ -280,6 +301,7 @@ def compare(results: list[dict]) -> dict:
     }
 
 
+@trace
 def main():
     """Command line: score a run folder, write official_scores.jsonl, print the comparison."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

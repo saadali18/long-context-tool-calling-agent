@@ -4,6 +4,26 @@ The client program from Task 2 of the A1 spec. It runs the agent loop against `l
 
 Pure Python standard library (Python 3.10+). Nothing to `pip install`.
 
+## Live device debugging logs
+
+Run with `--log-level DEBUG` to trace function entry/exit and time spent.
+INFO includes task/turn/request/tool start and finish, validity, scoring and Pi monitoring.
+Each run writes a rotating `<out>/harness.log` (10 MiB, 3 backups) and stderr messages.
+
+```bash
+python3 -m harness.run --bfcl-root "$B" --split splits/tasks_TradingBot_MessageAPI.json \
+  --which trace --limit 1 --extra-tasks data/long_tasks.jsonl \
+  --out results/pi_debug --log-level DEBUG
+# In a second SSH terminal:
+tail -f results/pi_debug/harness.log
+```
+
+Use INFO for long runs. `--log-file -` disables file logging.
+A `request_start` without `request_finish` indicates an outstanding model request;
+a `tool_start` without `tool_finish` indicates tool processing is still active.
+New diagnostic logs omit prompts, arguments, responses and exception messages.
+Existing `requests.jsonl` can include model content and arguments; protect it accordingly.
+
 ## What it logs (spec Task 2)
 
 | Spec requirement | Field | File |

@@ -6,12 +6,19 @@ simply left empty, so the same harness runs everywhere.
 
 from __future__ import annotations
 
+import logging
+from .debug_log import trace
+
 import shutil
 import subprocess
 import threading
 import time
 
 
+log = logging.getLogger(__name__)
+
+
+@trace
 def _run(args: list[str]) -> str:
     try:
         return subprocess.run(args, capture_output=True, text=True, timeout=5).stdout
@@ -19,6 +26,7 @@ def _run(args: list[str]) -> str:
         return ""
 
 
+@trace
 def read_power_w() -> float | None:
     out = _run(["vcgencmd", "pmic_read_adc"])
     if not out:
@@ -36,6 +44,7 @@ def read_power_w() -> float | None:
     return sum(cur[r] * volt[r] for r in cur if r in volt)
 
 
+@trace
 def read_temp_c() -> float | None:
     out = _run(["vcgencmd", "measure_temp"])
     try:
@@ -44,6 +53,7 @@ def read_temp_c() -> float | None:
         return None
 
 
+@trace
 def read_throttled() -> int | None:
     out = _run(["vcgencmd", "get_throttled"])
     try:
@@ -52,6 +62,7 @@ def read_throttled() -> int | None:
         return None
 
 
+@trace
 def read_rss_kb(pid: int | None) -> int | None:
     if not pid:
         return None
@@ -64,6 +75,7 @@ def read_rss_kb(pid: int | None) -> int | None:
     return None
 
 
+@trace
 def find_server_pid() -> int | None:
     out = _run(["pgrep", "-n", "llama-server"])
     return int(out.strip()) if out.strip().isdigit() else None
@@ -72,6 +84,7 @@ def find_server_pid() -> int | None:
 class Monitor:
     """Samples every `period_s`; call mark() to get a snapshot index, summary(a, b) for a window."""
 
+    @trace
     def __init__(self, server_pid: int | None = None, period_s: float = 1.0):
         self.pid = server_pid or find_server_pid()
         self.period = period_s
@@ -81,14 +94,19 @@ class Monitor:
         self._lock = threading.Lock()
         self._t = threading.Thread(target=self._loop, daemon=True)
 
+    @trace
     def start(self):
+        log.info('monitor_start on_pi=%s pid=%s period=%.1f',self.on_pi,self.pid,self.period)
         self._t.start()
         return self
 
+    @trace
     def stop(self):
+        log.info('monitor_stop samples=%d',len(self.samples))
         self._stop.set()
         self._t.join(timeout=10)
 
+    @trace
     def _loop(self):
         while not self._stop.is_set():
             s = {"t": time.monotonic(), "rss_kb": read_rss_kb(self.pid)}
@@ -96,11 +114,18 @@ class Monitor:
                 s.update(temp_c=read_temp_c(), throttled=read_throttled(), power_w=read_power_w())
             with self._lock:
                 self.samples.append(s)
+                count = len(self.samples)
+            if count%60==0:
+                log.debug('monitor_sample number=%d rss_kb=%s temp_c=%s',count,s.get('rss_kb'),s.get('temp_c'))
+            if s.get('throttled') and s['throttled'] & 0xF:
+                log.warning('active_throttling flags=0x%x',s['throttled'])
             self._stop.wait(self.period)
 
+    @trace
     def mark(self) -> float:
         return time.monotonic()
 
+    @trace
     def summary(self, t0: float, t1: float) -> dict:
         with self._lock:
             w = [s for s in self.samples if t0 <= s["t"] <= t1]
