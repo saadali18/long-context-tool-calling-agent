@@ -8,6 +8,9 @@ Qwen3 tokenizer.
       --bfcl-root third_party/gorilla/berkeley-function-call-leaderboard \
       --tokenizer ~/models/Qwen3-1.7B/tokenizer.json
 
+Our own long tasks: add --extra-tasks data/long_tasks.jsonl (counted after BFCL's;
+use --only-extra to count only them).
+
 Optional: --compare-tiktoken also counts with OpenAI's o200k tokenizer (which groups
 up to 3 digits per token), to show why other token counts can be much lower.
 """
@@ -23,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from harness.bfcl_env import BFCL, execute, method_owner, parse_call_string  # noqa: E402
+from harness.run import load_extra_tasks  # noqa: E402
 
 
 def make_counter(spec: str):
@@ -40,6 +44,8 @@ def main():
     ap.add_argument("--classes", default="TradingBot,MessageAPI")
     ap.add_argument("--split", help="optional split file: count only its tasks")
     ap.add_argument("--which", default="all", choices=["test", "trace", "all"])
+    ap.add_argument("--extra-tasks", help="JSONL of our own long tasks, counted after BFCL's")
+    ap.add_argument("--only-extra", action="store_true", help="count only the --extra-tasks tasks")
     ap.add_argument("--compare-tiktoken", action="store_true")
     ap.add_argument("--out", help="write a JSON report here too")
     a = ap.parse_args()
@@ -60,6 +66,10 @@ def main():
         sp = json.load(open(a.split))
         keep = set(sp["test"] + sp["trace"]) if a.which == "all" else set(sp[a.which])
         ids = [i for i in ids if i in keep]
+    if a.extra_tasks:
+        extra = load_extra_tasks(a.extra_tasks)
+        tasks.update(extra)
+        ids = list(extra) if a.only_extra else ids + list(extra)
 
     tools_tok = count(json.dumps(bfcl.tools_for(classes)))
     per_tool = defaultdict(list)            # name -> [(tokens, chars, digits, tiktoken)]

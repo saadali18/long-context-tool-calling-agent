@@ -1,0 +1,1 @@
+{"task": "multi_turn_long_context_143", "n_turns_run": 1, "official_session_success": false, "official_error_type": "truncated", "official_error_message": null, "official_turns": [true], "harness_session_success": false, "harness_fail_reason": null, "harness_turns": [true], "model_calls": [[["add_to_watchlist(stock='Zeta Corp')"]]], "agree": true}

@@ -1,7 +1,7 @@
 """Select BFCL and custom long-task IDs without train/test leakage.
 
 The existing split's test and trace lists contain the original BFCL
-identifiers. extra_tasks contains matching assignments for the custom tasks.
+identifiers. extra_test and extra_trace assign custom tasks, following main.
 trace is the development/tuning set; test is held out.
 """
 from __future__ import annotations
@@ -46,11 +46,10 @@ def select_task_ids(split: Mapping, which: str, extra_task_ids: Collection[str] 
     if extra_task_ids is None:
         return list(chosen)
 
-    extra = split.get("extra_tasks")
-    if not isinstance(extra, Mapping):
-        raise TaskSplitError("--extra-tasks requires extra_tasks assignments in the split file")
-    custom_test = _ids(extra, "test", "extra_tasks")
-    custom_trace = _ids(extra, "trace", "extra_tasks")
+    if "extra_test" not in split or "extra_trace" not in split:
+        raise TaskSplitError("--extra-tasks requires extra_test and extra_trace assignments")
+    custom_test = _ids(split, "extra_test", "split")
+    custom_trace = _ids(split, "extra_trace", "split")
     if set(custom_test) & set(custom_trace):
         raise TaskSplitError("custom task assigned to both test and trace")
     supplied = list(extra_task_ids)

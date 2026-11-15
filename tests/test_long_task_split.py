@@ -7,6 +7,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from harness.task_split import TaskSplitError, load_task_ids, select_task_ids
+from harness.run import load_extra_tasks, select_ids
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 SPLIT = ROOT / "splits" / "tasks_TradingBot_MessageAPI.json"
@@ -28,15 +30,15 @@ class LongTaskSplitTests(unittest.TestCase):
         trace = select_task_ids(self.split, "trace", self.all_long)
         self.assertEqual(len(test), 18)
         self.assertEqual(len(trace), 21)
-        self.assertIn("a1_long_context_4", trace)
-        self.assertNotIn("a1_long_context_4", test)
+        self.assertIn("a1_long_context_5", trace)
+        self.assertNotIn("a1_long_context_5", test)
         self.assertEqual(set(test) & set(trace), set())
         self.assertEqual(len(select_task_ids(self.split, "all", self.all_long)), 39)
         self.assertEqual(select_task_ids(self.split, "dev", self.all_long), trace)
 
     def test_all_six_custom_tasks_in_manifest(self):
         self.assertEqual(
-            set(self.split["extra_tasks"]["test"] + self.split["extra_tasks"]["trace"]),
+            set(self.split["extra_test"] + self.split["extra_trace"]),
             set(self.all_long),
         )
 
@@ -49,19 +51,20 @@ class LongTaskSplitTests(unittest.TestCase):
 
     def test_missing_assignment_fails_closed(self):
         changed = json.loads(json.dumps(self.split))
-        changed["extra_tasks"]["test"].remove("a1_long_context_1")
+        changed["extra_test"].remove("a1_long_context_1")
         with self.assertRaisesRegex(TaskSplitError, "unassigned"):
             select_task_ids(changed, "test", self.all_long)
 
     def test_extra_tasks_without_manifest_fails(self):
         changed = dict(self.split)
-        changed.pop("extra_tasks")
-        with self.assertRaisesRegex(TaskSplitError, "requires extra_tasks"):
+        changed.pop("extra_test")
+        changed.pop("extra_trace")
+        with self.assertRaisesRegex(TaskSplitError, "requires extra_test and extra_trace"):
             select_task_ids(changed, "test", self.all_long)
 
     def test_cross_split_leak_fails(self):
         changed = json.loads(json.dumps(self.split))
-        changed["extra_tasks"]["trace"].append("a1_long_context_1")
+        changed["extra_trace"].append("a1_long_context_1")
         with self.assertRaisesRegex(TaskSplitError, "both test and trace"):
             select_task_ids(changed, "test", self.all_long)
 
@@ -71,7 +74,7 @@ class LongTaskSplitTests(unittest.TestCase):
 
     def test_custom_id_collision_with_bfcl_fails(self):
         changed = json.loads(json.dumps(self.split))
-        changed["extra_tasks"]["test"][0] = changed["test"][0]
+        changed["extra_test"][0] = changed["test"][0]
         supplied = [changed["test"][0]] + self.all_long[1:]
         with self.assertRaisesRegex(TaskSplitError, "overlap BFCL"):
             select_task_ids(changed, "test", supplied)
@@ -86,6 +89,34 @@ class LongTaskSplitTests(unittest.TestCase):
             path.write_text('{"id":"x"}\n{"id":"x"}\n', encoding="utf-8")
             with self.assertRaisesRegex(TaskSplitError, "duplicate"):
                 load_task_ids(path)
+
+    def test_actual_runner_uses_same_frozen_split(self):
+        extra = load_extra_tasks(str(LONG_TASKS))
+        tasks = {i: SimpleNamespace(involved_classes=["TradingBot"]) for i in self.split["test"] + self.split["trace"]}
+        tasks.update(extra)
+        for which, expected_count, expected_long in (
+            ("test", 18, "a1_long_context_4"),
+            ("trace", 21, "a1_long_context_5"),
+        ):
+            args = SimpleNamespace(
+                ids=None, split=str(SPLIT), which=which,
+                extra_tasks=str(LONG_TASKS),
+            )
+            ids = select_ids(args, tasks, extra, self.split["classes"])
+            self.assertEqual(len(ids), expected_count)
+            self.assertIn(expected_long, ids)
+
+    def test_duplicate_loaded_custom_ids_rejected(self):
+        with TemporaryDirectory() as temp:
+            path = Path(temp) / "duplicate_full.jsonl"
+            rows = LONG_TASKS.read_text(encoding="utf-8").splitlines()
+            path.write_text(rows[0] + "\n" + rows[0] + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(TaskSplitError, "duplicate custom task ID"):
+                load_extra_tasks(str(path))
+
+    def test_extra_split_reference_must_be_loaded(self):
+        with self.assertRaisesRegex(TaskSplitError, "not_loaded"):
+            select_task_ids(self.split, "test", self.all_long[:5])
 
 
 if __name__ == "__main__":

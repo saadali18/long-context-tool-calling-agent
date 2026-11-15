@@ -1,35 +1,36 @@
-# Split-aware long-task evaluation
+# Long-context task split: integration with main
 
-This change keeps the existing 33 BFCL task assignments fixed while including Eman's
-six custom long-session tasks in an explicit, leakage-safe split. **`trace` means
-development/tuning; `test` is held out for final comparisons.** This PR does not
-alter BFCL scoring, model execution, prompt caching, or quantization.
+This PR is synchronized with Maria's merged split-aware runner and Obaid's official
+BFCL scorer. It **does not replace their code or re-import Eman's tasks**. It adds
+validation, regression tests, and protections against accidentally changing a
+frozen evaluation split.
 
-## Task allocation
+## Frozen allocation (from main)
 
-| Dataset | Trace / development | Held-out test |
+| Dataset | Development / trace | Held-out test |
 | --- | ---: | ---: |
-| TradingBot + MessageAPI BFCL | 20 | 13 |
-| Custom long-context tasks | 1 (L4) | 5 (L1, L2, L3, L5, L6) |
+| BFCL TradingBot + MessageAPI | 20 | 13 |
+| Eman's custom tasks | L5 | L1, L2, L3, L4, L6 |
 | **Total** | **21** | **18** |
 
-L4 is the early-rule-recall task. This allocation is a proposed fixed evaluation
-policy: **confirm the split with the team before tuning or publishing final scores**.
+The source of truth is `splits/tasks_TradingBot_MessageAPI.json`, using keys
+`test`, `trace`, `extra_test`, and `extra_trace`. The existing five-task
+held-out set is preserved; **do not tune on these held-out long tasks**.
 
-## Files
+## Safeguards
 
-- `data/long_tasks.jsonl` is copied unchanged from Eman's `long-tasks` branch.
-- `splits/tasks_TradingBot_MessageAPI.json` keeps its original BFCL IDs and has a
-  new `extra_tasks.test`/`extra_tasks.trace` mapping.
-- `harness/task_split.py` validates the manifest and selects exact IDs.
-- `harness/run.py` uses that selector when custom tasks are provided.
-- `harness/make_split.py` retains existing custom-task assignments if the BFCL
-  split manifest is regenerated.
-- `tests/test_long_task_split.py` validates separation and common error cases.
+- `harness.task_split.select_task_ids` checks both BFCL groups for overlap,
+  all custom assignments, duplicate IDs, unexpected/unloaded custom tasks, and
+  accidental assignment of the same task to two groups.
+- `harness.run.select_ids` calls that validator when a split is supplied, while
+  retaining the already-merged behavior for explicit `--ids` and unsplit runs.
+- `harness.run.load_extra_tasks` rejects duplicate IDs in custom JSONL files.
+- `harness.make_split` preserves `extra_test`, `extra_trace`, and
+  `extra_note` if a split manifest is regenerated for the same tool classes.
 
-## Dry-run the selection: no model, Pi, or BFCL installation necessary
+## Validate without the Pi or model server
 
-Run from repository root:
+From repository root:
 
 ```bash
 python3 -m unittest discover -s tests -p 'test_long_task_split.py' -v
@@ -37,43 +38,27 @@ python3 -m harness.task_split --which test
 python3 -m harness.task_split --which trace
 ```
 
-Expected: **11 tests pass**, test lists **18 IDs**, and trace lists **21 IDs**.
-Test and trace are disjoint. `--which dev` is an alias for `trace`.
+Expected: **14 unit tests**, **18 test tasks**, **21 development tasks**, no
+overlap. `--which dev` is an alias for `--which trace`.
 
-## Real-model runs (requires BFCL checkout + llama-server)
+The existing `tests/test_bfcl.py` suite still tests Eman's tasks and BFCL
+official scoring separately; it requires the BFCL checkout.
+
+## Real-model example (requires BFCL checkout + llama-server)
 
 ```bash
 B=third_party/gorilla/berkeley-function-call-leaderboard
 
-# Development set (21 tasks total). Can limit runs for smoke tests.
 python3 -m harness.run --bfcl-root "$B" \
   --split splits/tasks_TradingBot_MessageAPI.json --which trace \
-  --extra-tasks data/long_tasks.jsonl --limit 1 \
-  --out results/long_trace_smoke
+  --extra-tasks data/long_tasks.jsonl --out results/long_trace
 
-# Held-out test set (18 tasks). Keep for final, frozen evaluation.
+# Held-out test; run only after the pipeline is finalized.
 python3 -m harness.run --bfcl-root "$B" \
   --split splits/tasks_TradingBot_MessageAPI.json --which test \
-  --extra-tasks data/long_tasks.jsonl \
-  --out results/long_test_final
+  --extra-tasks data/long_tasks.jsonl --out results/long_test
 ```
 
-The existing BFCL-only command (without `--extra-tasks`) still selects the
-original 13 test or 20 trace tasks.
-
-If `--extra-tasks` is supplied with `--split`, every custom task ID must
-appear in exactly one set. Missing, duplicated, or unexpected IDs cause an
-error **before inference**. To deliberately debug an individual task, use
-`--ids a1_long_context_4 --extra-tasks data/long_tasks.jsonl`; explicit
-IDs bypass the split and should never be used to produce held-out results.
-
-## Integration with Obaid's official scorer
-
-This branch is intentionally small and independent: it changes **task
-selection only**. The official BFCL scorer can be integrated later without
-changing these assignments. After integration, replay all six ground-truth
-tasks and compare local and official scoring on the **same** traces.
-
-**Not yet verified in this PR:** full BFCL/llama-server model runs, scorer
-parity, actual long-task model accuracy, Pi throughput, memory, or energy.
-The no-model split tests validate task selection, not these metrics.
+**Not established by these unit tests:** Qwen3 model accuracy, timing or memory
+on the Raspberry Pi, or scorer parity on new real-model traces. Run the BFCL
+integration tests and actual device measurements separately.

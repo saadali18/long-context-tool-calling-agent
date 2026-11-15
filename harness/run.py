@@ -5,6 +5,9 @@ Baseline (spec Task 3): stateless client, prompt cache off, all tool schemas, no
   python -m harness.run --bfcl-root third_party/gorilla/berkeley-function-call-leaderboard \
       --split splits/tasks_TradingBot_MessageAPI.json --which test --out results/harness_baseline
 
+Add the custom long tasks with --extra-tasks data/long_tasks.jsonl. With --split,
+only the long tasks assigned to the chosen group (extra_test / extra_trace) run.
+
 Outputs in --out: metadata.json, requests.jsonl (one line per model request),
 sessions.jsonl (one line per task). Summarise with `python -m harness.summarize <out>`.
 """
@@ -43,6 +46,33 @@ def load_extra_tasks(path: str) -> dict[str, Task]:
     return out
 
 
+def select_ids(a, tasks: dict, extra: dict, classes: list[str]) -> list[str]:
+    """Select exact BFCL/custom task IDs using the frozen split configuration.
+
+    --ids explicitly overrides the split (for debugging only).
+    With --split, every loaded custom task must have exactly one assignment.
+    Without --split, preserve the existing full-subset run behavior.
+    """
+    if a.ids:
+        ids = [i.strip() for i in a.ids.split(",")]
+        if not all(ids) or len(ids) != len(set(ids)):
+            raise TaskSplitError("--ids must contain unique, nonempty task IDs")
+    elif a.split:
+        sp = json.load(open(a.split, encoding="utf-8"))
+        if sp["classes"] != classes:
+            raise TaskSplitError(f"--classes {classes} does not match the split's {sp['classes']}")
+        ids = select_task_ids(sp, a.which, list(extra) if a.extra_tasks else None)
+    else:
+        ids = sorted((t.id for t in tasks.values() if t.id not in extra and set(t.involved_classes) <= set(classes)),
+                     key=lambda s: int(s.rsplit("_", 1)[1]))
+        ids += list(extra)
+
+    unknown = [i for i in ids if i not in tasks]
+    if unknown:
+        raise TaskSplitError(f"unknown task ids {unknown} (an extra task needs --extra-tasks)")
+    return ids
+
+
 def long_context_lists() -> dict:
     """Lengths of BFCL's long-context filler lists and the A1 cap, if applied (scripts/cap_long_context.py)."""
     import importlib
@@ -68,7 +98,7 @@ def main():
     ap.add_argument("--split", help="file from harness.make_split")
     ap.add_argument("--which", default="test", choices=["test", "trace", "dev", "all"])
     ap.add_argument("--ids", help="comma-separated task ids (overrides --split)")
-    ap.add_argument("--extra-tasks", help="JSONL of custom long tasks (selected by the split manifest)")
+    ap.add_argument("--extra-tasks", help="JSONL of our own long tasks; with --split, only those in the chosen extra_test/extra_trace group run")
     ap.add_argument("--limit", type=int, help="run only the first N tasks")
     ap.add_argument("--max-turns", type=int, help="truncate each session to N user turns (Pi latency runs)")
     ap.add_argument("--server-url", default="http://127.0.0.1:8080")
@@ -87,38 +117,20 @@ def main():
     bfcl = BFCL(a.bfcl_root)
     tasks = bfcl.load_tasks()
 
+    extra = load_extra_tasks(a.extra_tasks) if a.extra_tasks else {}
+    duplicates = set(tasks) & set(extra)
+    if duplicates:
+        sys.exit(f"custom task IDs collide with BFCL IDs: {sorted(duplicates)}")
+    tasks.update(extra)
     try:
-        extra = load_extra_tasks(a.extra_tasks) if a.extra_tasks else {}
-        duplicates = set(tasks) & set(extra)
-        if duplicates:
-            raise TaskSplitError(f"custom task IDs collide with BFCL IDs: {sorted(duplicates)}")
-        tasks.update(extra)
-
-        if a.ids:
-            # Explicit --ids overrides the split for targeted debugging only.
-            ids = [i.strip() for i in a.ids.split(",")]
-            if not all(ids) or len(ids) != len(set(ids)):
-                raise TaskSplitError("--ids must contain unique, nonempty task IDs")
-        elif a.split:
-            sp = json.load(open(a.split, encoding="utf-8"))
-            if sp["classes"] != classes:
-                raise TaskSplitError(f"--classes {classes} does not match the split's {sp['classes']}")
-            ids = select_task_ids(sp, a.which, list(extra) if a.extra_tasks else None)
-        else:
-            if a.extra_tasks:
-                raise TaskSplitError("--extra-tasks requires --split (or explicit --ids)")
-            ids = sorted((t.id for t in tasks.values() if set(t.involved_classes) <= set(classes)),
-                         key=lambda s: int(s.rsplit("_", 1)[1]))
-        for i in ids:
-            if i not in tasks:
-                raise TaskSplitError(f"task {i!r} not loaded (check --extra-tasks and --split)")
-            if not set(tasks[i].involved_classes) <= set(classes):
-                raise TaskSplitError(f"task {i} uses {tasks[i].involved_classes}, outside the tool subset {classes}")
+        ids = select_ids(a, tasks, extra, classes)
     except (TaskSplitError, KeyError) as exc:
         sys.exit(f"task selection error: {exc}")
-
     if a.limit:
         ids = ids[: a.limit]
+    for i in ids:
+        if not set(tasks[i].involved_classes) <= set(classes):
+            sys.exit(f"task {i} uses {tasks[i].involved_classes}, outside the tool subset {classes}")
 
     server = LlamaServer(a.server_url)
     proc, cold_start_s = None, None
