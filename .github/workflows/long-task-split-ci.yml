@@ -4,14 +4,14 @@ on:
   push:
     branches:
       - feature/long-task-eval-split
+      - feature/device-debug-logging
   pull_request:
     paths:
-      - "harness/run.py"
-      - "harness/task_split.py"
-      - "harness/make_split.py"
+      - "harness/**"
       - "splits/**"
       - "data/long_tasks.jsonl"
       - "tests/test_long_task_split.py"
+      - "tests/test_debug_logging.py"
       - ".github/workflows/long-task-split-ci.yml"
 
 permissions:
@@ -30,6 +30,8 @@ jobs:
         run: python -m compileall -q harness tests/test_long_task_split.py
       - name: Run regression suite on real task JSONL
         run: python -m unittest discover -s tests -p 'test_long_task_split.py' -v
+      - name: Run debug logging privacy and function tests
+        run: python -m unittest discover -s tests -p 'test_debug_logging.py' -v
       - name: Show held-out and development counts
         run: |
           python -m harness.task_split --which test | head -n 1

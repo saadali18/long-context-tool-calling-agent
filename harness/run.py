@@ -14,7 +14,11 @@ sessions.jsonl (one line per task). Summarise with `python -m harness.summarize 
 
 from __future__ import annotations
 
+import logging
+from .debug_log import configure_logging, trace
+
 import argparse
+import os
 import json
 import platform
 import shlex
@@ -30,7 +34,10 @@ from .pi_monitor import Monitor
 from .runner import jsonl_writer, run_session
 from .task_split import TaskSplitError, select_task_ids
 
+log = logging.getLogger(__name__)
 
+
+@trace
 def load_extra_tasks(path: str) -> dict[str, Task]:
     """Our own long tasks: JSONL rows with id, question, initial_config, involved_classes, ground_truth."""
     out = {}
@@ -46,6 +53,7 @@ def load_extra_tasks(path: str) -> dict[str, Task]:
     return out
 
 
+@trace
 def select_ids(a, tasks: dict, extra: dict, classes: list[str]) -> list[str]:
     """Select exact BFCL/custom task IDs using the frozen split configuration.
 
@@ -73,6 +81,7 @@ def select_ids(a, tasks: dict, extra: dict, classes: list[str]) -> list[str]:
     return ids
 
 
+@trace
 def long_context_lists() -> dict:
     """Lengths of BFCL's long-context filler lists and the A1 cap, if applied (scripts/cap_long_context.py)."""
     import importlib
@@ -83,6 +92,7 @@ def long_context_lists() -> dict:
     return out
 
 
+@trace
 def git_rev(path: Path) -> str | None:
     try:
         return subprocess.run(["git", "-C", str(path), "rev-parse", "HEAD"], capture_output=True,
@@ -91,6 +101,7 @@ def git_rev(path: Path) -> str | None:
         return None
 
 
+@trace
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bfcl-root", required=True)
@@ -108,11 +119,15 @@ def main():
     ap.add_argument("--thinking", choices=["on", "off"], default="off")
     ap.add_argument("--cache-prompt", action="store_true", help="allow prefix reuse (NOT for the baseline)")
     ap.add_argument("--system-prompt", choices=["none", "bfcl"], default="none")
+    ap.add_argument("--log-level", choices=["DEBUG","INFO","WARNING","ERROR"], default=os.environ.get("A1_LOG_LEVEL","INFO"))
+    ap.add_argument("--log-file", help="default: <out>/harness.log; - disables file")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    configure_logging(a.log_level, a.log_file if a.log_file is not None else out / 'harness.log')
+    log.info('run_start mode=%s cache_prompt=%s', a.which, a.cache_prompt)
     classes = a.classes.split(",")
     bfcl = BFCL(a.bfcl_root)
     tasks = bfcl.load_tasks()
@@ -122,12 +137,14 @@ def main():
     if duplicates:
         sys.exit(f"custom task IDs collide with BFCL IDs: {sorted(duplicates)}")
     tasks.update(extra)
+    log.info('tasks_loaded bfcl=%d custom=%d', len(tasks)-len(extra),len(extra))
     try:
         ids = select_ids(a, tasks, extra, classes)
     except (TaskSplitError, KeyError) as exc:
         sys.exit(f"task selection error: {exc}")
     if a.limit:
         ids = ids[: a.limit]
+    log.info('tasks_selected count=%d group=%s',len(ids),a.which)
     for i in ids:
         if not set(tasks[i].involved_classes) <= set(classes):
             sys.exit(f"task {i} uses {tasks[i].involved_classes}, outside the tool subset {classes}")
@@ -135,18 +152,22 @@ def main():
     server = LlamaServer(a.server_url)
     proc, cold_start_s = None, None
     if a.launch_server:
+        log.info('server_launch_start')
         t0 = time.monotonic()
         proc = subprocess.Popen(shlex.split(a.launch_server), stdout=open(out / "server.log", "w"),
                                 stderr=subprocess.STDOUT)
         server.wait_ready(max_wait_s=1800)
         cold_start_s = time.monotonic() - t0
+        log.info('server_ready cold_start_s=%.1f',cold_start_s)
     elif not server.health():
+        log.error('server_unreachable')
         sys.exit(f"llama-server not reachable at {a.server_url} (start it, or use --launch-server)")
 
     try:
         with urllib.request.urlopen(a.server_url.rstrip("/") + "/props", timeout=10) as r:
             props = json.loads(r.read())
-    except Exception:
+    except Exception as e:
+        log.warning("server_props_unavailable type=%s",type(e).__name__)
         props = None
 
     cfg = {"temperature": a.temperature, "max_tokens": a.max_tokens, "thinking": a.thinking == "on",
@@ -166,15 +187,18 @@ def main():
     monitor = Monitor(server_pid=proc.pid if proc else None).start()
     try:
         for n, tid in enumerate(ids):
+            log.info('task_start id=%s number=%d/%d',tid,n+1,len(ids))
             print(f"[{time.strftime('%H:%M:%S')}] {n + 1}/{len(ids)} {tid}", flush=True)
             s = run_session(tasks[tid], bfcl, server, classes, cfg, log_req, monitor)
             if n == 0 and cold_start_s is not None and s["warm_time_to_first_call_ms"] is not None:
                 s["cold_time_to_first_call_ms"] = round(cold_start_s * 1000 + s["warm_time_to_first_call_ms"], 1)
             log_ses(s)
+            log.info("task_finish id=%s success=%s passed=%d/%d duration_s=%.1f failure=%s",tid,s["session_success"],s["turns_passed"],s["n_turns_run"],s["session_wall_ms"]/1000,s["fail_reason"])
             print(f"    success={s['session_success']} turns_passed={s['turns_passed']}/{s['n_turns_run']} "
                   f"calls_valid={s['n_calls_valid']}/{s['n_calls']} wall={s['session_wall_ms'] / 1000:.0f}s",
                   flush=True)
     finally:
+        log.info('cleanup_start')
         monitor.stop()
         f_req.close()
         f_ses.close()
