@@ -38,7 +38,7 @@ def configure_logging(level="INFO", log_file=None):
 
 def trace(fn):
     """Opt-in DEBUG function enter/exit, duration, and exception type. Never arguments."""
-    log = logging.getLogger(fn.__module__)
+    log = logging.getLogger("harness.trace")
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         if not log.isEnabledFor(logging.DEBUG):
