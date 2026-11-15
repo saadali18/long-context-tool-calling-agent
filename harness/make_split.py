@@ -42,7 +42,14 @@ def main():
     }
     out = Path(a.out_dir) / f"tasks_{'_'.join(classes)}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(split, indent=2))
+    if out.exists():
+        previous = json.loads(out.read_text(encoding="utf-8"))
+        if previous.get("classes") == classes:
+            # Preserve already frozen long-task assignments when rebuilding BFCL IDs.
+            for key in ("extra_test", "extra_trace", "extra_note"):
+                if key in previous:
+                    split[key] = previous[key]
+    out.write_text(json.dumps(split, indent=2) + "\n", encoding="utf-8")
     print(f"{n_funcs} functions, {len(sel)} tasks -> {len(split['test'])} test / "
           f"{len(split['trace'])} trace  ->  {out}")
 

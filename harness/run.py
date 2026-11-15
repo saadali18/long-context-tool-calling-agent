@@ -5,8 +5,8 @@ Baseline (spec Task 3): stateless client, prompt cache off, all tool schemas, no
   python -m harness.run --bfcl-root third_party/gorilla/berkeley-function-call-leaderboard \
       --split splits/tasks_TradingBot_MessageAPI.json --which test --out results/harness_baseline
 
-Add our own long tasks with --extra-tasks data/long_tasks.jsonl. With --split, only the
-long tasks listed under the chosen group ("extra_test" / "extra_trace") are run.
+Add the custom long tasks with --extra-tasks data/long_tasks.jsonl. With --split,
+only the long tasks assigned to the chosen group (extra_test / extra_trace) run.
 
 Outputs in --out: metadata.json, requests.jsonl (one line per model request),
 sessions.jsonl (one line per task). Summarise with `python -m harness.summarize <out>`.
@@ -28,15 +28,18 @@ from .bfcl_env import BFCL, Task
 from .llm_client import LlamaServer
 from .pi_monitor import Monitor
 from .runner import jsonl_writer, run_session
+from .task_split import TaskSplitError, select_task_ids
 
 
 def load_extra_tasks(path: str) -> dict[str, Task]:
     """Our own long tasks: JSONL rows with id, question, initial_config, involved_classes, ground_truth."""
     out = {}
-    for line in open(path):
+    for line in open(path, encoding="utf-8"):
         if not line.strip():
             continue
         r = json.loads(line)
+        if r["id"] in out:
+            raise TaskSplitError(f"duplicate custom task ID: {r['id']}")
         out[r["id"]] = Task(id=r["id"], turns=r["question"], initial_config=r["initial_config"],
                             involved_classes=r["involved_classes"], ground_truth=r["ground_truth"],
                             excluded_functions=r.get("excluded_function", []), source=path)
@@ -44,39 +47,29 @@ def load_extra_tasks(path: str) -> dict[str, Task]:
 
 
 def select_ids(a, tasks: dict, extra: dict, classes: list[str]) -> list[str]:
-    """Which task ids to run.
+    """Select exact BFCL/custom task IDs using the frozen split configuration.
 
-    --ids     runs exactly the listed ids (BFCL or extra); nothing is added.
-    --split   runs the chosen group (--which test|trace|all). BFCL ids come from the
-              split's "test"/"trace" lists, extra-task ids from "extra_test"/"extra_trace".
-              Every extra task must be assigned to one of the two, so a test task can
-              never slip into a trace (tuning) run.
-    neither   runs every BFCL task in the tool subset, plus every extra task.
+    --ids explicitly overrides the split (for debugging only).
+    With --split, every loaded custom task must have exactly one assignment.
+    Without --split, preserve the existing full-subset run behavior.
     """
     if a.ids:
-        ids = [i.strip() for i in a.ids.split(",") if i.strip()]
+        ids = [i.strip() for i in a.ids.split(",")]
+        if not all(ids) or len(ids) != len(set(ids)):
+            raise TaskSplitError("--ids must contain unique, nonempty task IDs")
     elif a.split:
-        sp = json.load(open(a.split))
+        sp = json.load(open(a.split, encoding="utf-8"))
         if sp["classes"] != classes:
-            sys.exit(f"--classes {classes} does not match the split's {sp['classes']}")
-        groups = ["test", "trace"] if a.which == "all" else [a.which]
-        ids = [i for g in groups for i in sp[g]]
-        if extra:
-            ex_test, ex_trace = set(sp.get("extra_test", [])), set(sp.get("extra_trace", []))
-            both = sorted(ex_test & ex_trace)
-            if both:
-                sys.exit(f"extra tasks {both} are in both extra_test and extra_trace of {a.split}")
-            unassigned = sorted(set(extra) - ex_test - ex_trace)
-            if unassigned:
-                sys.exit(f"extra tasks {unassigned} are not assigned to extra_test or extra_trace in {a.split}")
-            ids += [i for g in groups for i in sp.get(f"extra_{g}", []) if i in extra]
+            raise TaskSplitError(f"--classes {classes} does not match the split's {sp['classes']}")
+        ids = select_task_ids(sp, a.which, list(extra) if a.extra_tasks else None)
     else:
         ids = sorted((t.id for t in tasks.values() if t.id not in extra and set(t.involved_classes) <= set(classes)),
                      key=lambda s: int(s.rsplit("_", 1)[1]))
         ids += list(extra)
+
     unknown = [i for i in ids if i not in tasks]
     if unknown:
-        sys.exit(f"unknown task ids {unknown} (an extra task needs --extra-tasks)")
+        raise TaskSplitError(f"unknown task ids {unknown} (an extra task needs --extra-tasks)")
     return ids
 
 
@@ -103,7 +96,7 @@ def main():
     ap.add_argument("--bfcl-root", required=True)
     ap.add_argument("--classes", default="TradingBot,MessageAPI", help="the fixed tool subset")
     ap.add_argument("--split", help="file from harness.make_split")
-    ap.add_argument("--which", default="test", choices=["test", "trace", "all"])
+    ap.add_argument("--which", default="test", choices=["test", "trace", "dev", "all"])
     ap.add_argument("--ids", help="comma-separated task ids (overrides --split)")
     ap.add_argument("--extra-tasks", help="JSONL of our own long tasks; with --split, only those in the chosen extra_test/extra_trace group run")
     ap.add_argument("--limit", type=int, help="run only the first N tasks")
@@ -125,8 +118,14 @@ def main():
     tasks = bfcl.load_tasks()
 
     extra = load_extra_tasks(a.extra_tasks) if a.extra_tasks else {}
+    duplicates = set(tasks) & set(extra)
+    if duplicates:
+        sys.exit(f"custom task IDs collide with BFCL IDs: {sorted(duplicates)}")
     tasks.update(extra)
-    ids = select_ids(a, tasks, extra, classes)
+    try:
+        ids = select_ids(a, tasks, extra, classes)
+    except (TaskSplitError, KeyError) as exc:
+        sys.exit(f"task selection error: {exc}")
     if a.limit:
         ids = ids[: a.limit]
     for i in ids:

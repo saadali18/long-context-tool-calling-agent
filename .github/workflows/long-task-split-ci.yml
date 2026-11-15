@@ -1,0 +1,36 @@
+name: Long-task split validation
+
+on:
+  push:
+    branches:
+      - feature/long-task-eval-split
+  pull_request:
+    paths:
+      - "harness/run.py"
+      - "harness/task_split.py"
+      - "harness/make_split.py"
+      - "splits/**"
+      - "data/long_tasks.jsonl"
+      - "tests/test_long_task_split.py"
+      - ".github/workflows/long-task-split-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  split-regression:
+    name: Validate merged harness task selection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile merged Python modules
+        run: python -m compileall -q harness tests/test_long_task_split.py
+      - name: Run regression suite on real task JSONL
+        run: python -m unittest discover -s tests -p 'test_long_task_split.py' -v
+      - name: Show held-out and development counts
+        run: |
+          python -m harness.task_split --which test | head -n 1
+          python -m harness.task_split --which trace | head -n 1
