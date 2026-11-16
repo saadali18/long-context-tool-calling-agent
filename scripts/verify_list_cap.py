@@ -13,7 +13,7 @@ the original lists and once with the lists trimmed to --cap, and checks:
   4. Tokens per task before/after (exact with --tokenizer, else a per-digit estimate).
 
   python3 scripts/verify_list_cap.py --bfcl-root third_party/gorilla/berkeley-function-call-leaderboard \
-      --cap 600 --tokenizer ~/models/Qwen3-1.7B/tokenizer.json
+      --cap 500 --txn-cap 100 --tokenizer ~/models/Qwen3-1.7B/tokenizer.json
 """
 
 from __future__ import annotations
@@ -78,7 +78,8 @@ def is_prefix_trim(name, before: str, after: str) -> bool:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bfcl-root", required=True)
-    ap.add_argument("--cap", type=int, default=600)
+    ap.add_argument("--cap", type=int, default=500, help="MA_5, MA_20 and WATCH_LIST cap (TA: 500)")
+    ap.add_argument("--txn-cap", type=int, default=100, help="TRANSACTION_HISTORY cap (TA: 100)")
     ap.add_argument("--classes", default="TradingBot,MessageAPI")
     ap.add_argument("--tokenizer", help="Qwen3 tokenizer.json for exact counts")
     a = ap.parse_args()
@@ -91,7 +92,7 @@ def main():
 
     bfcl = env.BFCL(a.bfcl_root)
     L = importlib.import_module("bfcl_eval.eval_checker.multi_turn_eval.func_source_code.long_context")
-    if "_A1_LIST_CAP" in vars(L):
+    if "_A1_LIST_CAP" in vars(L) or "_A1_LIST_CAPS" in vars(L):
         sys.exit("long_context.py is already capped: run scripts/cap_long_context.py --undo first, then retry")
     lengths = {n: len(getattr(L, n)) for n in LISTS}
 
@@ -101,8 +102,9 @@ def main():
 
     before = {t.id: replay(bfcl, t, classes) for t in tasks}
     saved = {n: list(getattr(L, n)) for n in LISTS}
+    caps = {n: (a.txn_cap if n == "TRANSACTION_HISTORY_EXTENSION" else a.cap) for n in LISTS}
     for n in LISTS:                       # trim in place: TradingBot holds the same list objects
-        del getattr(L, n)[a.cap:]
+        del getattr(L, n)[caps[n]:]
     after = {t.id: replay(bfcl, t, classes) for t in tasks}
 
     problems, changed, per_task = [], 0, []
@@ -140,7 +142,7 @@ def main():
         getattr(L, n)[:] = saved[n]
 
     b = [x[1] for x in per_task]; c = [x[2] for x in per_task]
-    print(f"tasks: {len(tasks)}   cap: {a.cap}   original lengths: {lengths}")
+    print(f"tasks: {len(tasks)}   caps: {caps}   original lengths: {lengths}")
     print(f"tokens counted with: {'Qwen3 tokenizer' if a.tokenizer else 'per-digit estimate'}")
     print(f"changed call outputs: {changed} (all should be get_stock_info / get_watchlist / get_transaction_history)")
     print(f"problems: {len(problems)}")

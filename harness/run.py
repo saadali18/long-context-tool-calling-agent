@@ -36,6 +36,13 @@ from .task_split import TaskSplitError, select_task_ids
 
 log = logging.getLogger(__name__)
 
+# Qwen3 model card: thinking T=0.6, top-p 0.95, top-k 20; non-thinking T=0.7, top-p 0.8, top-k 20 (min-p 0).
+# max_tokens: thinking needs room to reason before the call; 512 was the old non-thinking budget.
+QWEN3_SAMPLING = {
+    "on": {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "max_tokens": 4096},
+    "off": {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "max_tokens": 512},
+}
+
 
 @trace
 def load_extra_tasks(path: str) -> dict[str, Task]:
@@ -89,6 +96,7 @@ def long_context_lists() -> dict:
     names = ["MA_5_EXTENSION", "MA_20_EXTENSION", "WATCH_LIST_EXTENSION", "TRANSACTION_HISTORY_EXTENSION"]
     out = {n: len(getattr(L, n)) for n in names}
     out["a1_list_cap"] = vars(L).get("_A1_LIST_CAP")
+    out["a1_list_caps"] = vars(L).get("_A1_LIST_CAPS")
     return out
 
 
@@ -114,15 +122,25 @@ def main():
     ap.add_argument("--max-turns", type=int, help="truncate each session to N user turns (Pi latency runs)")
     ap.add_argument("--server-url", default="http://127.0.0.1:8080")
     ap.add_argument("--launch-server", help="full llama-server command; harness starts it and measures cold start")
-    ap.add_argument("--temperature", type=float, default=0.0)
-    ap.add_argument("--max-tokens", type=int, default=512, help="decode budget per request")
-    ap.add_argument("--thinking", choices=["on", "off"], default="off")
+    ap.add_argument("--thinking", choices=["on", "off"], default="on",
+                    help="Qwen3 thinking mode (baseline: on, TA guidance of Nov 16)")
+    ap.add_argument("--temperature", type=float, help="default: Qwen3 preset for the chosen mode")
+    ap.add_argument("--top-p", type=float, help="default: Qwen3 preset for the chosen mode")
+    ap.add_argument("--top-k", type=int, help="default: Qwen3 preset for the chosen mode")
+    ap.add_argument("--min-p", type=float, default=0.0, help="Qwen3 recommends 0 (llama-server's own default is 0.05)")
+    ap.add_argument("--max-tokens", type=int, help="decode budget per request; default 4096 with thinking, 512 without")
+    ap.add_argument("--seed", type=int, default=0, help="sampling seed, recorded for reproducibility")
     ap.add_argument("--cache-prompt", action="store_true", help="allow prefix reuse (NOT for the baseline)")
     ap.add_argument("--system-prompt", choices=["none", "bfcl"], default="none")
     ap.add_argument("--log-level", choices=["DEBUG","INFO","WARNING","ERROR"], default=os.environ.get("A1_LOG_LEVEL","INFO"))
     ap.add_argument("--log-file", help="default: <out>/harness.log; - disables file")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    # Qwen3's recommended sampling per mode (model card), used unless set explicitly
+    preset = QWEN3_SAMPLING[a.thinking]
+    for k in ("temperature", "top_p", "top_k", "max_tokens"):
+        if getattr(a, k) is None:
+            setattr(a, k, preset[k])
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -170,7 +188,8 @@ def main():
         log.warning("server_props_unavailable type=%s",type(e).__name__)
         props = None
 
-    cfg = {"temperature": a.temperature, "max_tokens": a.max_tokens, "thinking": a.thinking == "on",
+    cfg = {"temperature": a.temperature, "top_p": a.top_p, "top_k": a.top_k, "min_p": a.min_p,
+           "max_tokens": a.max_tokens, "seed": a.seed, "thinking": a.thinking == "on",
            "cache_prompt": a.cache_prompt, "system_prompt": a.system_prompt, "max_turns": a.max_turns}
     meta = {
         "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "argv": sys.argv, "config": cfg,
