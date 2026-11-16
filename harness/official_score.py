@@ -36,8 +36,13 @@ Usage
     python3 -m harness.official_score results/harness_bf16_143_full \\
         --bfcl-root third_party/gorilla/berkeley-function-call-leaderboard
 
-Writes `official_scores.jsonl` (one line per task) into the run folder and prints both
-scorers side by side.
+Writes `official_scores.jsonl` (one line per task) and `bfcl_scores.json` (run totals) into
+the run folder and prints both scorers side by side. `harness.run` does the same automatically
+at the end of every run (unless `--no-score`).
+
+Each task's line also has `tool_calls` (see `harness.call_coverage`): per turn, which expected
+calls the model made (matched), made with other arguments (wrong_args), did not make (missed),
+and which calls it added (extra).
 """
 
 from __future__ import annotations
@@ -54,7 +59,7 @@ from pathlib import Path
 
 from . import bfcl_env as env
 from .bfcl_env import BFCL, Task
-from .run import load_extra_tasks
+from .call_coverage import session_coverage
 
 
 @trace
@@ -242,9 +247,13 @@ def score_session(checker: OfficialChecker, bfcl: BFCL, task: Task, session: dic
         "harness_fail_reason": session.get("fail_reason"),
         "harness_turns": harness_turns,
         "model_calls": model_calls,
+        "tool_calls": session_coverage(bfcl, task, model_calls),
     }
     result["agree"] = (official["valid"] == session["session_success"] and turns == harness_turns)
-    log.info("score_finish task=%s official=%s harness=%s agree=%s",task.id,official["valid"],session["session_success"],result["agree"])
+    cov = result["tool_calls"]
+    log.info("score_finish task=%s official=%s turns_passed=%d/%d calls_matched=%d/%d wrong_args=%d missed=%d extra=%d harness=%s agree=%s",
+             task.id, official["valid"], sum(turns), len(turns), cov["matched"], cov["expected"],
+             cov["wrong_args"], cov["missed"], cov["extra"], session["session_success"], result["agree"])
     return result
 
 
@@ -266,12 +275,20 @@ def score_run(run_dir: str | Path, bfcl_root: str | Path, extra_tasks: str | Non
     Returns:
         One result per session (see `score_session`), in sessions.jsonl order.
     """
+    from .run import load_extra_tasks  # imported here: harness.run imports this module
+
     log.info("score_run_start with_custom_tasks=%s",bool(extra_tasks))
-    run_dir = Path(run_dir)
     bfcl = BFCL(bfcl_root)
     tasks = bfcl.load_tasks()
     if extra_tasks:
         tasks.update(load_extra_tasks(extra_tasks))
+    return score_sessions(run_dir, bfcl, tasks)
+
+
+@trace
+def score_sessions(run_dir: str | Path, bfcl: BFCL, tasks: dict[str, Task]) -> list[dict]:
+    """Like `score_run`, with BFCL and the tasks already loaded (used by `harness.run`)."""
+    run_dir = Path(run_dir)
     checker = OfficialChecker()
 
     requests_by_task = defaultdict(list)
@@ -290,6 +307,8 @@ def compare(results: list[dict]) -> dict:
 
     off_turns = [x for r in results for x in r["official_turns"]]
     har_turns = [x for r in results for x in r["harness_turns"]]
+    calls = {k: sum(r["tool_calls"][k] for r in results)
+             for k in ("expected", "made", "matched", "wrong_args", "missed", "extra")}
     return {
         "num_sessions": len(results),
         "official_session_success_rate": rate([r["official_session_success"] for r in results]),
@@ -298,7 +317,32 @@ def compare(results: list[dict]) -> dict:
         "harness_per_turn_accuracy": rate(har_turns),
         "sessions_in_agreement": sum(r["agree"] for r in results),
         "disagreements": [r["task"] for r in results if not r["agree"]],
+        "tool_calls": {**calls,
+                       "call_recall": round(calls["matched"] / calls["expected"], 4) if calls["expected"] else None,
+                       "call_precision": round(calls["matched"] / calls["made"], 4) if calls["made"] else None},
     }
+
+
+@trace
+def save(run_dir: str | Path, results: list[dict]) -> dict:
+    """Write official_scores.jsonl (one line per task) and bfcl_scores.json (run totals), log the totals.
+
+    Returns:
+        The run totals (see `compare`).
+    """
+    run_dir = Path(run_dir)
+    with open(run_dir / "official_scores.jsonl", "w") as f:
+        for r in results:
+            f.write(json.dumps(r) + "\n")
+    summary = compare(results)
+    (run_dir / "bfcl_scores.json").write_text(json.dumps(summary, indent=2))
+    c = summary["tool_calls"]
+    log.info("bfcl_scores sessions=%d session_success=%s per_turn_accuracy=%s calls_matched=%d/%d "
+             "wrong_args=%d missed=%d extra=%d call_recall=%s call_precision=%s disagreements=%d",
+             summary["num_sessions"], summary["official_session_success_rate"],
+             summary["official_per_turn_accuracy"], c["matched"], c["expected"], c["wrong_args"],
+             c["missed"], c["extra"], c["call_recall"], c["call_precision"], len(summary["disagreements"]))
+    return summary
 
 
 @trace
@@ -311,15 +355,13 @@ def main():
     a = ap.parse_args()
 
     results = score_run(a.run_dir, a.bfcl_root, a.extra_tasks)
-    with open(Path(a.run_dir) / "official_scores.jsonl", "w") as f:
-        for r in results:
-            f.write(json.dumps(r) + "\n")
+    summary = save(a.run_dir, results)
     for r in results:
         print(f"{r['task']}: official {'PASS' if r['official_session_success'] else 'FAIL'} "
               f"({r['official_error_type']}) turns {r['official_turns']} | harness "
               f"{'PASS' if r['harness_session_success'] else 'FAIL'} turns {r['harness_turns']}"
               f"{'' if r['agree'] else '  <-- DISAGREE'}")
-    print(json.dumps(compare(results), indent=2))
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":

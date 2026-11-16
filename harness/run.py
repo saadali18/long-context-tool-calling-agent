@@ -10,6 +10,11 @@ only the long tasks assigned to the chosen group (extra_test / extra_trace) run.
 
 Outputs in --out: metadata.json, requests.jsonl (one line per model request),
 sessions.jsonl (one line per task). Summarise with `python -m harness.summarize <out>`.
+
+At the end, the run is scored with BFCL's official checker (harness.official_score):
+official_scores.jsonl (per task: session/turn results, expected tool calls matched, made with
+wrong arguments, missed, and extra calls) and bfcl_scores.json (run totals). The scores are
+also written to the log. Skip with --no-score.
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ from pathlib import Path
 
 from .bfcl_env import BFCL, Task
 from .llm_client import LlamaServer
+from .official_score import save as save_scores, score_sessions
 from .pi_monitor import Monitor
 from .runner import jsonl_writer, run_session
 from .task_split import TaskSplitError, select_task_ids
@@ -121,6 +127,7 @@ def main():
     ap.add_argument("--system-prompt", choices=["none", "bfcl"], default="none")
     ap.add_argument("--log-level", choices=["DEBUG","INFO","WARNING","ERROR"], default=os.environ.get("A1_LOG_LEVEL","INFO"))
     ap.add_argument("--log-file", help="default: <out>/harness.log; - disables file")
+    ap.add_argument("--no-score", action="store_true", help="skip BFCL scoring at the end of the run")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -204,6 +211,29 @@ def main():
         f_ses.close()
         if proc:
             proc.terminate()
+
+    if not a.no_score:
+        score_run_folder(out, bfcl, tasks)
+
+
+@trace
+def score_run_folder(out: Path, bfcl: BFCL, tasks: dict) -> None:
+    """Score every session in `out` with BFCL's official checker; write and log the scores.
+
+    A scoring error is logged and does not fail the run (the run's own files are already saved);
+    the run can be scored again later with `python -m harness.official_score <out>`.
+    """
+    log.info("bfcl_score_start out=%s", out)
+    try:
+        summary = save_scores(out, score_sessions(out, bfcl, tasks))
+    except Exception as e:
+        log.error("bfcl_score_failed type=%s", type(e).__name__)
+        return
+    c = summary["tool_calls"]
+    print(f"BFCL: session_success={summary['official_session_success_rate']} "
+          f"per_turn_accuracy={summary['official_per_turn_accuracy']} "
+          f"calls matched={c['matched']}/{c['expected']} wrong_args={c['wrong_args']} "
+          f"missed={c['missed']} extra={c['extra']} -> {out / 'bfcl_scores.json'}", flush=True)
 
 
 if __name__ == "__main__":

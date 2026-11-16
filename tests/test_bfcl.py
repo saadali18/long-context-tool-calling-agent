@@ -11,6 +11,8 @@ Each session is then scored twice, by the harness itself and by BFCL's official 
 - correct calls pass and a silent model fails, under both scorers;
 - both scorers agree when the model makes mistakes;
 - unsafe calls are never handed to BFCL's `eval`;
+- the tool-call view (matched / wrong_args / missed / extra) matches what the model did;
+- a harness run writes its BFCL scores to the run folder and the log;
 - our own long tasks (data/long_tasks.jsonl) are solvable by their ground truth.
 
 The BFCL copy is taken from the BFCL_ROOT environment variable, or from
@@ -28,8 +30,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # so `harness` imports from any folder
 from harness import bfcl_env as env  # noqa: E402
 from harness.official_score import OfficialChecker, rebuild_model_calls, score_session  # noqa: E402
-from harness.run import load_extra_tasks  # noqa: E402
-from harness.runner import run_session  # noqa: E402
+from harness.call_coverage import match_turn  # noqa: E402
+from harness.debug_log import configure_logging  # noqa: E402
+from harness.run import load_extra_tasks, score_run_folder  # noqa: E402
+from harness.runner import jsonl_writer, run_session  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 BFCL_ROOT = Path(os.environ.get("BFCL_ROOT", ROOT / "third_party/gorilla/berkeley-function-call-leaderboard"))
@@ -201,6 +205,66 @@ def test_rebuild_keeps_only_task_tools():
         {"name": "get_watchlist", "well_formed": False},
     ]}, {"turn": 0, "step": 1, "calls": []}]
     assert rebuild_model_calls(requests, 1, {"get_watchlist"}) == [[["get_watchlist()"]]]
+
+
+# ---------------------------------------------------------------- expected tool calls
+
+
+def test_tool_calls_ground_truth_all_matched(bfcl, tasks, checker):
+    """Replaying the ground truth: every expected call is matched, nothing missed or extra."""
+    cov = play_and_score(tasks[SPLIT["test"][0]], bfcl, checker, "gt")["tool_calls"]
+    assert cov["expected"] > 0 and cov["matched"] == cov["expected"] == cov["made"]
+    assert cov["missed"] == cov["wrong_args"] == cov["extra"] == 0 and cov["call_recall"] == 1.0
+
+
+def test_tool_calls_silent_model_all_missed(bfcl, tasks, checker):
+    """A model that never calls a tool misses every expected call."""
+    cov = play_and_score(tasks[SPLIT["test"][0]], bfcl, checker, "silent")["tool_calls"]
+    assert cov["missed"] == cov["expected"] > 0 and cov["matched"] == cov["made"] == 0
+    assert cov["call_recall"] == 0.0 and cov["call_precision"] is None
+
+
+def test_tool_calls_wrong_arguments_detected(bfcl, tasks, checker):
+    """Changed text arguments in turn 1 show up as wrong_args there, not as missed calls."""
+    for tid in SPLIT["test"]:
+        task = tasks[tid]
+        r = play_and_score(task, bfcl, checker, "wrong")
+        turn1 = r["tool_calls"]["turns"][1]
+        if any("'" in c for c in task.ground_truth[1]):  # turn 1 has a text argument
+            assert turn1["wrong_args"] and not turn1["missed"], tid
+        assert r["tool_calls"]["turns"][0]["matched"] == task.ground_truth[0], tid
+
+
+def test_match_turn_defaults_order_and_extra(bfcl, tasks):
+    """Default values are filled in, order inside a turn does not matter, unknown calls are extra."""
+    task = tasks[SPLIT["test"][0]]
+    owner = env.method_owner(bfcl.new_instances(task.involved_classes, task.initial_config))
+    r = match_turn(["get_watchlist()", "get_stock_info(symbol='AAPL')"],
+                   ["get_stock_info('AAPL')", "get_watchlist()", "get_current_time()"], owner)
+    assert r["matched"] == ["get_watchlist()", "get_stock_info(symbol='AAPL')"]
+    assert r["extra"] == ["get_current_time()"] and not r["missed"] and not r["wrong_args"]
+    r = match_turn(["get_stock_info(symbol='AAPL')", "get_watchlist()"], ["get_stock_info(symbol='MSFT')"], owner)
+    assert r["wrong_args"] == [{"expected": "get_stock_info(symbol='AAPL')", "made": "get_stock_info(symbol='MSFT')"}]
+    assert r["missed"] == ["get_watchlist()"] and not r["extra"]
+
+
+def test_run_folder_gets_scores_and_log(bfcl, tasks, tmp_path):
+    """After a run, harness.run writes official_scores.jsonl and bfcl_scores.json and logs the totals."""
+    log_req, f_req = jsonl_writer(tmp_path / "requests.jsonl")
+    log_ses, f_ses = jsonl_writer(tmp_path / "sessions.jsonl")
+    for tid, mode in ((SPLIT["test"][0], "gt"), (SPLIT["test"][1], "silent")):
+        log_ses(run_session(tasks[tid], bfcl, FakeServer(tasks[tid], bfcl, mode), CLASSES, CFG, log_req))
+    f_req.close()
+    f_ses.close()
+    configure_logging("INFO", tmp_path / "harness.log")
+    score_run_folder(tmp_path, bfcl, tasks)
+    log_text = (tmp_path / "harness.log").read_text()
+    lines = [json.loads(x) for x in (tmp_path / "official_scores.jsonl").read_text().splitlines()]
+    summary = json.loads((tmp_path / "bfcl_scores.json").read_text())
+    assert [x["task"] for x in lines] == [SPLIT["test"][0], SPLIT["test"][1]]
+    assert summary["num_sessions"] == 2 and summary["official_session_success_rate"] == 0.5
+    assert summary["tool_calls"]["missed"] == lines[1]["tool_calls"]["expected"] > 0
+    assert "bfcl_scores sessions=2" in log_text and "score_finish" in log_text
 
 
 # ---------------------------------------------------------------- our own long tasks

@@ -149,3 +149,31 @@ On task 143 both scorers fail the session at turn 1 for the same reason
 (`execution_response_mismatch`).
 
 All 34 pytest tests pass.
+
+## Step 8: Score every harness run automatically
+
+- `harness/call_coverage.py`: per turn, expected calls `matched`, `wrong_args`, `missed`, and
+  `extra` calls; totals with `call_recall` and `call_precision`.
+- `harness/official_score.py`: adds `tool_calls` to each task's line, run totals to
+  `bfcl_scores.json`, and `score_finish` / `bfcl_scores` log lines.
+- `harness/run.py`: scores the run folder after the last task; `--no-score` skips it.
+
+Check:
+
+```bash
+python3 -m pytest tests
+bash tests/run_mock_tests.sh
+python3 -m harness.official_score results/harness_bf16_143_full --bfcl-root $B
+```
+
+Results:
+
+| Run | Session / per-turn | Calls matched | Wrong args | Missed | Extra |
+|---|---|---|---|---|---|
+| mock `gt` | 1.0 / 1.0 | 62 of 62 | 0 | 0 | 0 |
+| mock `noisy` | 1.0 / 1.0 | 62 of 62 | 0 | 0 | 13 |
+| mock `silent` | 0.0 / 0.0 | 0 of 62 | 0 | 62 | 0 |
+| mock `wrong` | 0.308 / 0.463 | 53 of 62 | 9 | 0 | 0 |
+| `harness_bf16_143_full` | 0.0 / 0.25 | 0 of 6 | 5 | 1 | 2 |
+
+All 56 pytest tests pass.
