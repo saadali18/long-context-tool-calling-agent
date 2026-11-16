@@ -48,7 +48,8 @@ class LlamaServer:
 
     @trace
     def chat(self, messages: list, tools: list, *, temperature: float, max_tokens: int,
-             cache_prompt: bool, enable_thinking: bool, seed: int = 0) -> dict:
+             cache_prompt: bool, enable_thinking: bool, seed: int = 0,
+             top_p: float | None = None, top_k: int | None = None, min_p: float | None = None) -> dict:
         body = {
             "messages": messages,
             "tools": tools,
@@ -60,6 +61,10 @@ class LlamaServer:
             "cache_prompt": cache_prompt,                       # baseline: False (no prefix reuse)
             "chat_template_kwargs": {"enable_thinking": enable_thinking},
         }
+        # Qwen3's recommended sampling (sent only when set; otherwise llama-server's defaults apply)
+        for k, v in (("top_p", top_p), ("top_k", top_k), ("min_p", min_p)):
+            if v is not None:
+                body[k] = v
         req = urllib.request.Request(
             self.url + "/v1/chat/completions", data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json"}, method="POST")

@@ -43,7 +43,13 @@ Existing `requests.jsonl` can include model content and arguments; protect it ac
 
 The defaults are the baseline: a **stateless** client (the full history is re-sent on every request), **`cache_prompt: false`** (no prefix reuse), **all 30 tool schemas** on every request (the chat template puts them in the system prompt), and **no grammar** (the model may write anything). Do not pass `--cache-prompt` for baseline runs.
 
-Defaults the group still has to confirm: tool subset `TradingBot,MessageAPI` (30 functions, 33 BFCL tasks, 13 held out for test), `--temperature 0`, `--max-tokens 512`, `--thinking off`, no extra system prompt.
+Sampling (TA guidance, Nov 16): Qwen3 **thinking on** (`--thinking on`, the default) with Qwen3's recommended settings: temperature 0.6, top-p 0.95, top-k 20, min-p 0, and `--max-tokens 4096` so the model can reason before its call. `--thinking off` switches to Qwen3's non-thinking preset (temperature 0.7, top-p 0.8, top-k 20, `--max-tokens 512`). Any of these can be overridden on the command line, and every run records them in `metadata.json`. `--seed` (default 0) is passed to llama-server so sampled runs can be repeated. With thinking on, `requests.jsonl` also records the thinking text (`reasoning`, first 4000 characters) and its length (`reasoning_chars`).
+
+Runs made before Nov 16 used `--thinking off --temperature 0 --max-tokens 512`; reproduce them with exactly those flags.
+
+Other defaults: tool subset `TradingBot,MessageAPI` (30 functions, 33 BFCL tasks, 13 held out for test), no extra system prompt.
+
+List cap (TA guidance, Nov 16): `python3 scripts/cap_long_context.py` caps MA_5, MA_20 and WATCH_LIST at 500 items and TRANSACTION_HISTORY at 100, in every copy of BFCL's `long_context.py` it finds. Check with `--status`.
 
 ## Setup (on the Pi, and on any machine used for accuracy runs)
 

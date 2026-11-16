@@ -57,7 +57,8 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
             try:
                 out = server.chat(messages, tools, temperature=cfg["temperature"],
                                   max_tokens=cfg["max_tokens"], cache_prompt=cfg["cache_prompt"],
-                                  enable_thinking=cfg["thinking"], seed=cfg.get("seed", 0))
+                                  enable_thinking=cfg["thinking"], seed=cfg.get("seed", 0),
+                                  top_p=cfg.get("top_p"), top_k=cfg.get("top_k"), min_p=cfg.get("min_p"))
             except ServerError as e:
                 log.error("request_error task=%s turn=%d step=%d type=%s",task.id,ti,step,type(e).__name__)
                 aborted = f"server_error: {e}"[:500]
@@ -67,6 +68,7 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
             finish = out["choices"][0].get("finish_reason")
             tool_calls = msg.get("tool_calls") or []
             content = msg.get("content") or ""
+            reasoning = msg.get("reasoning_content") or ""   # Qwen3 thinking, split out by llama-server
             tim = out.get("timings", {}) or {}
             usage = out.get("usage", {}) or {}
 
@@ -82,6 +84,8 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
                 "request_wall_ms": round(out["_client_wall_ms"], 1),
                 "finish_reason": finish,
                 "content": content[:2000],
+                "reasoning_chars": len(reasoning),              # 0 when thinking is off
+                "reasoning": reasoning[:4000],
                 "calls": [],
             }
             log.info("request_finish task=%s turn=%d step=%d wall_ms=%.1f prompt=%s cached=%s prefill_ms=%s decode_ms=%s tool_calls=%d",task.id,ti,step,rec["request_wall_ms"],prompt_tokens,rec["cached_tokens"],rec["prefill_ms"],rec["decode_ms"],len(tool_calls))
