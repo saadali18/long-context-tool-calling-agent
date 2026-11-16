@@ -1,41 +1,46 @@
 # A1 baseline progress: Qwen3-1.7B BF16 on Raspberry Pi 5
 
+Last updated Nov 16, 2026 · @Maryala
+
 ## Summary
 
-Three of the five baseline requirements are complete. The other two are partly complete. The baseline is Qwen3-1.7B in BF16, served by llama.cpp on a Raspberry Pi 5 with 8 GB of RAM.
+Ran the baseline Qwen3-1.7B in BF16, served by llama.cpp on a Raspberry Pi 5 with 8 GB of RAM. We have already reportd 1–3 (throughput, memory and bandwidth), because they are measured with `llama-bench` and do not depend on thinking mode or sampling.
+Requirements 4 and 5 (session times and accuracy) are not complete. They we need to measure them again with thinking on. The thinking-off sessions we have ran before are a reference only so should not considered as baseline results.
 
 The most important finding so far is that BF16 is limited by computation on the Pi, not by memory bandwidth. The Pi's Cortex-A76 cores cannot do BF16 arithmetic directly. Prefill runs at about 1.4 tokens per second. Decode runs at about 1.1 tokens per second at the start of a session.
 
 The second finding is that the stateless baseline client wastes most of its time. In task 143, the model read 36,141 tokens to handle a conversation that was only 5,709 tokens long. Prefill took 97% of the 7.2-hour session.
 
-| #   | Requirement                                                    | Status          | Key number                                                                                             |
-| --- | -------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
-| 1   | Prefill and decode throughput at three or more context lengths | Complete        | Decode falls from 1.11 to 0.71 tokens/s between 0 and 8k context                                       |
-| 2   | Memory breakdown                                               | Complete        | Peak 5.6 GiB with a 16k context                                                                        |
-| 3   | Is decode bandwidth-bound?                                     | Complete        | No. Decode uses 28–36% of the measured 12.6 GB/s                                                       |
-| 4   | Per-turn and per-session wall-clock time                       | Partly complete | Three sessions measured: 7.2 h, 3.1 h and 4.5 h. Cold start not measured yet                           |
-| 5   | Single-turn accuracy vs session success, with the cause tested | Partly complete | 1 of 10 turns passed across three sessions, and that one only by luck. The experiment is not built yet |
+The baseline now should run with Qwen3's thinking mode **on**, using Qwen3's recommended sampling: temperature 0.6, top-p 0.95 and top-k 20. The TA suggested to lower the cap on one filler list, the transaction history, from 500 to 100 items. The Pi sessions in this document (tasks 143, 104 and 146) used the earlier settings: thinking off and temperature 0. Their speed, memory and bandwidth findings still hold. They are kept as a non-thinking reference, and the baseline sessions and accuracy runs are being repeated with thinking on.
+
+| #   | Requirement                                                    | Status                    | Key number                                                                                                                                      |
+| --- | -------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Prefill and decode throughput at three or more context lengths | Complete                  | Decode falls from 1.11 to 0.71 tokens/s between 0 and 8k context                                                                                |
+| 2   | Memory breakdown                                               | Complete                  | Peak 5.6 GiB with a 16k context                                                                                                                 |
+| 3   | Is decode bandwidth-bound?                                     | Complete                  | No. Decode uses 28–36% of the measured 12.6 GB/s                                                                                                |
+| 4   | Per-turn and per-session wall-clock time                       | Not started (thinking on) | Three sessions with thinking off: 7.2 h, 3.1 h and 4.5 h. To be repeated with thinking on, on tasks up to about 10k tokens                      |
+| 5   | Single-turn accuracy vs session success, with the cause tested | Not started (thinking on) | Thinking off: 1 of 10 turns passed, by luck. To be measured with thinking on, on the full test split on a host. The experiment is not built yet |
 
 ## Setup
 
 Every measurement in this document uses the settings below. Changing any of them means the baseline must be measured again.
 
-| Part             | Setting                                                                             |
-| ---------------- | ----------------------------------------------------------------------------------- |
-| Board            | Raspberry Pi 5 Model B Rev 1.0, 8 GB RAM, 117 GB SD card                            |
-| Operating system | Raspberry Pi OS 64-bit (Debian Trixie), desktop turned off (`multi-user.target`)    |
-| Cooling          | Active cooler, enabled with `dtparam=cooling_fan=on` in `/boot/firmware/config.txt` |
-| Inference engine | llama.cpp from our fork, commit `efbf6e80a` (build 12115), default Release build    |
-| Model            | `Qwen/Qwen3-1.7B`, converted by us to BF16 GGUF: 3.78 GiB, 2.03B parameters         |
-| Server command   | `llama-server -c 16384 -t 4 --jinja -np 1`                                          |
-| Client           | Our harness (`harness/`), stateless: the full history is re-sent on every request   |
-| Prompt cache     | Off: every request sends `"cache_prompt": false`                                    |
-| Tool schemas     | All 30 tools on every request, no grammar                                           |
-| Sampling         | Temperature 0, at most 512 output tokens per request, Qwen3 thinking mode off       |
+| Part             | Setting                                                                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Board            | Raspberry Pi 5 Model B Rev 1.0, 8 GB RAM, 117 GB SD card                                                                                                                                          |
+| Operating system | Raspberry Pi OS 64-bit (Debian Trixie), desktop turned off (`multi-user.target`)                                                                                                                  |
+| Cooling          | Active cooler, enabled with `dtparam=cooling_fan=on` in `/boot/firmware/config.txt`                                                                                                               |
+| Inference engine | llama.cpp from our fork, commit `efbf6e80a` (build 12115), default Release build                                                                                                                  |
+| Model            | `Qwen/Qwen3-1.7B`, converted by us to BF16 GGUF: 3.78 GiB, 2.03B parameters                                                                                                                       |
+| Server command   | `llama-server -c 16384 -t 4 --jinja -np 1`                                                                                                                                                        |
+| Client           | Our harness (`harness/`), stateless: the full history is re-sent on every request                                                                                                                 |
+| Prompt cache     | Off: every request sends `"cache_prompt": false`                                                                                                                                                  |
+| Tool schemas     | All 30 tools on every request, no grammar                                                                                                                                                         |
+| Sampling         | Qwen3 thinking mode on; temperature 0.6, top-p 0.95, top-k 20, min-p 0; at most 4096 output tokens per request (TA suggested). Runs before Nov 16 used thinking off, temperature 0 and 512 tokens |
 
 The fan setting matters. Without it, the fan never ran and the CPU throttled at 90°C. One early benchmark run was discarded for that reason.
 
-**Thinking mode.** Qwen3's thinking mode is off for the baseline and will stay off for every later variant. The TA confirmed this choice on Nov 13. The tasks do not need step-by-step reasoning. Qwen3 also tends to overthink in this mode. Reasoning quality also drops more than non-reasoning quality after quantization, so keeping it off makes the later quantized comparisons fair.
+**Thinking mode.** The baseline uses Qwen3's thinking mode, which is the chat template's default. On Nov 13 the TA had advised thinking off. On Nov 16 the TA reversed this after reproducing our task 100 failure. With thinking off, the model logged in, said it would fund the account, and ended the turn without calling `fund_account`. With thinking on, the TA's runs called `fund_account(amount=2203.4)` correctly. The TA expects quantization to hurt thinking more than plain tool calling. So later steps should compare thinking and non-thinking accuracy at each quantization level, and report any trade-off against this thinking-on baseline.
 
 ## Benchmark and token budget
 
@@ -45,7 +50,7 @@ Thirteen of the 33 tasks are held out as the test set. Every reported number is 
 
 **The token problem.** With Qwen3's tokenizer, BFCL's long-context outputs were far larger than the project manual expected. Qwen3 turns every digit into its own token. One `get_stock_info` call returned 31,664 tokens.
 
-**The fix.** On the TA's advice, we cap four filler lists in BFCL's `long_context.py` at 500 items. The capped lists are `MA_5_EXTENSION`, `MA_20_EXTENSION`, `WATCH_LIST_EXTENSION` and `TRANSACTION_HISTORY_EXTENSION`. A verification script confirmed that the cap does not change any score. Every harness run records the cap in its `metadata.json`.
+**The fix.** On the TA's advice, we cap four filler lists in BFCL's `long_context.py`. Since Nov 16, `MA_5_EXTENSION`, `MA_20_EXTENSION` and `WATCH_LIST_EXTENSION` are capped at 500 items, and `TRANSACTION_HISTORY_EXTENSION` at 100. Before Nov 16, all four were capped at 500. A verification script replays the correct answers of all 33 tasks with and without the cap. No backend state changes, and the correct answers still pass every turn. Every harness run records the caps in its `metadata.json`.
 
 The table shows real Qwen3 token counts for the 33 tasks.
 
@@ -61,6 +66,8 @@ The table shows real Qwen3 token counts for the 33 tasks.
 The 30 tool schemas alone take 3,001 tokens. They are sent with every request.
 
 With the cap, 11 of the 13 test tasks fit in the 16k context. Tasks 131 and 116 do not fit. Following the TA's guidance, they count as baseline failures.
+
+The token counts in the table above were measured with the earlier cap of 500 on all four lists. The lower transaction-history cap shortens only tasks that call `get_transaction_history`. Exact counts with the new cap still have to be measured with the Qwen3 tokenizer.
 
 ## Requirement 1: throughput at three context lengths
 
@@ -124,7 +131,7 @@ This gives us a testable prediction for later. A format the cores handle nativel
 
 ## Requirement 4: wall-clock time per turn and per session
 
-Three full sessions are measured: test tasks 143, 104 and 146. All three were warm runs. Task 143 is described in detail first. Tasks 104 and 146 are compared after it.
+Three full sessions are measured with the settings used before Nov 16 (thinking off, temperature 0): test tasks 143, 104 and 146. All three were warm runs. Task 143 is described in detail first. Tasks 104 and 146 are compared after it. The thinking-on baseline sessions will be added as they finish. Thinking adds decode tokens to every request, so those sessions will take longer.
 
 Task 143 has 4 user turns. The server was already running when the session started, so these are warm times.
 
@@ -179,7 +186,7 @@ Task 146's time to the first tool call is long for a simple reason. The model an
 
 A shorter session here does not mean a faster system. It means the model skipped work that the correct answer does. When we compare variants later, we must compare the same tasks, and we must also report how many requests each session made.
 
-**Other test tasks.** We will not run all 13 test tasks on the Pi. As the TA allowed, the rest are extrapolated from the measured speeds. The estimates below assume the model makes the same calls as the correct answer.
+**Other test tasks.** We will not run all 13 test tasks on the Pi. The TA confirmed on Nov 16 that the baseline can be characterized with a few Pi tasks that process up to about 10k tokens. Tasks above that are reported as prohibitively long for the baseline, to be improved by our experiments. Accuracy on the full test split runs on a host with the same weights. The estimates below assume thinking off and the correct answer's calls.
 
 | Task          | Turns | Final context | Estimated Pi time     | Plan                                  |
 | ------------- | ----- | ------------- | --------------------- | ------------------------------------- |
@@ -234,21 +241,43 @@ The correct answers never use the lookup tool `get_symbol_by_name`. They expect 
 
 Task 146 also shows cascades. Turn 3 could not pass, because order 12446 was never created after the order in turn 2 failed. Turn 1 probably depends on turn 0 as well. If the model had called `get_watchlist`, it would have seen 'ZETA' in the output. The teacher-forcing experiment will test both claims.
 
-**What is still needed.** One session is not enough to measure the gap. We need session success and per-turn accuracy on all 13 test tasks. These runs will happen on a faster machine with the same model file and llama.cpp commit.
+**Task 100 and thinking mode.** Task 100 has 2 turns. In turn 0, the model correctly called `get_stock_info('NVDA')` and reported $220.34. In turn 1, the user asks to fund the account with the value of 10 Nvidia shares, and the correct call is `fund_account(amount=2203.4)`. With thinking off, the model called `trading_login`, wrote "I will now execute the fund operation", and ended the turn without calling `fund_account`. This happened with BF16 on a Mac, with Q4_0 on the Pi, and in the TA's own runs. With thinking on, the TA's runs called `fund_account(amount=2203.4)`. This result is why the baseline now uses thinking on.
+
+**What is still needed.** We need session success and per-turn accuracy on the full test split, with thinking on. These runs will happen on a faster machine with the same model file, llama.cpp commit and BFCL copy. Call validity, per-turn accuracy and session success are all reported, as the spec asks.
 
 The cause must also be tested by experiment, not only by reading logs. The planned experiment is teacher forcing. Before each turn, the harness resets the conversation and the app state to the correct ones. Then the model handles that turn only. If a turn passes under teacher forcing but failed in the normal run, its failure was a cascade. The difference between the two runs is the accuracy gap. The harness does not have this mode yet.
 
+## Notes for the first improvements
+
+These are not part of the baseline. They record what the TA suggested and what one exploratory run showed, so the improvement steps can start from them.
+
+**TA suggestions.** The first improvement can be converting the weights from BF16 to FP16, because the Pi's cores have faster FP16 instructions. Prompt caching comes next. We should also check whether flash attention is enabled; the TA expects it to be on by default.
+
+**Exploratory Q4_0 run (Nov 15, thinking off).** We converted the model to Q4_0 and ran test task 100 on the Pi. This was a preview only, not a lineage step.
+
+| Measure                                         | BF16                 | Q4_0          |
+| ----------------------------------------------- | -------------------- | ------------- |
+| `llama-bench` prefill, depth 0                  | 1.40 tokens/s        | 98.1 tokens/s |
+| `llama-bench` decode, depth 0                   | 1.11 tokens/s        | 11.0 tokens/s |
+| Prefill in the session, 3.1k-token prompt       | about 1.4 tokens/s   | 59 tokens/s   |
+| Prefill in the session, 12.8k-token prompt      | about 1.4 tokens/s   | 24 tokens/s   |
+| Decode in the session, 12.7k tokens of context  | —                    | 1.0 tokens/s  |
+| Task 100, whole session (41,559 tokens re-read) | about 8 h (estimate) | 29 min        |
+
+Q4_0 removes the BF16 compute bottleneck, but long contexts become the new bottleneck. At 12.7k tokens, decode falls from 11 to about 1 token/s, and prefill falls from 59 to about 24 tokens/s. This points to prompt caching, KV-cache quantization and context management as the steps that matter after weight quantization.
+
 ## Remaining work
 
-Most of the Pi work is done. Three kinds of work remain: accuracy on the full test split, the accuracy-gap experiment, and two short Pi runs. Most group decisions are now settled.
+With TA's guidance baseline sessions and accuracy runs must be repeated with thinking on. The harness and the cap script already follow the new settings.
 
 **To complete the baseline:**
 
-- [x] Run task 104 on the Pi (3.1 h).
-- [x] Run task 146 on the Pi (4.5 h).
-- [ ] Measure the cold-start time to the first call once on the Pi. The run uses the first turn of task 143, with the file cache cleared before the server starts. The project manual lists cold and warm time to the first call among the metrics for every change.
-- [ ] Score tasks 104 and 146 with BFCL's official checker on the Pi, and commit the result. A check in a separate copy already showed that both scorers agree on every turn.
-- [ ] Measure accuracy on the full test split on a faster machine, with the same model file, llama.cpp commit and BFCL copy. Run the 13 BFCL test tasks now. Run the 5 long test tasks once the long-task split is frozen.
+- [ ] Commit and push the harness and cap-script update: thinking on, Qwen3 sampling, 4096 output tokens, transaction-history cap of 100. The change is made and tested locally, but not yet pushed.
+- [ ] Apply the new cap on the Pi and on the accuracy host, and check it with `scripts/cap_long_context.py --status`.
+- [ ] Rerun 2–3 baseline sessions on the Pi with thinking on, choosing tasks that process up to about 10k tokens.
+- [ ] Measure the cold-start time to the first call once on the Pi, with thinking on.
+- [ ] Measure accuracy on the full test split on a faster machine, with thinking on: 13 BFCL tasks, then the 5 long tasks.
+- [ ] Score every run with BFCL's official checker, including the older runs of tasks 104 and 146.
 - [ ] Build the teacher-forcing mode in the harness, and run the accuracy-gap experiment.
 - [ ] Run one short Pi session that shows the long tasks overflow the 16k context. They then count as baseline failures.
 
@@ -258,5 +287,5 @@ Most of the Pi work is done. Three kinds of work remain: accuracy on the full te
 - [x] Use one BFCL source: the git clone at commit `6ea5797`. The harness and the official checker load the same copy.
 - [x] Keep one list-cap script: `scripts/cap_long_context.py`, with a cap of 500 items.
 - [x] Use one tool-schema format: the harness's, at 3,001 tokens. The second harness was removed.
-- [ ] Finalize the 6 long tasks. They must stay between 16k and 32k tokens, as the manual requires. Proposal: replace `get_transaction_history` in L1 and L6 with lighter calls, which keeps them at about 17–20k tokens.
-- [ ] Freeze the long-task split before any long-task accuracy run. PR #2 adds tested split selection. It needs a merge with `main` and a group choice of the trace task, L4 or L5. The test set will then have 18 tasks.
+- [ ] Finalize the 6 long tasks. They must stay between 16k and 32k tokens, as the manual requires. With the transaction-history cap at 100, L1 and L6 fall to roughly 10–13k tokens (estimate), because most of their size came from `get_transaction_history`. Both need extra calls, for example another `get_stock_info` call adds about 7,900 tokens. L2–L5 are not affected.
+- [x] Freeze the long-task split. Done: PR #2 is merged. L5 is in trace, and L1–L4 and L6 are in test, which gives 18 test tasks and 21 trace tasks.
