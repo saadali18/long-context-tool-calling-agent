@@ -114,7 +114,12 @@ So the full baseline test split cannot run on the Pi in BF16. Measure latency on
 
 ## Official BFCL scorer
 
-`harness/official_score.py` re-scores a finished run folder with BFCL's original checker code, loaded from the same `--bfcl-root` (so the same commit and the same list cap):
+`harness.run` runs this scorer automatically after the last task. The scores go to the log
+(`score_finish` per task, `bfcl_scores` for the run) and to two files in `--out`:
+`official_scores.jsonl` and `bfcl_scores.json`. `--no-score` skips this step. A scoring error is
+logged as `bfcl_score_failed` and does not fail the run.
+
+`harness/official_score.py` also re-scores a finished run folder with BFCL's original checker code, loaded from the same `--bfcl-root` (so the same commit and the same list cap):
 
 ```bash
 python3 -m harness.official_score results/harness_baseline_test --bfcl-root $B
@@ -133,7 +138,20 @@ python3 -m harness.official_score <run_dir> --bfcl-root $B --extra-tasks data/lo
 - The model's calls are rebuilt from `requests.jsonl` as BFCL call strings. Only calls with valid JSON arguments, a name from the task's tools and plain argument names are kept, because BFCL runs them with `eval`. Steps without a kept call are left out, as BFCL does.
 - An aborted session, or a turn that used all 20 steps, fails as `multi_turn:force_terminated`. A `--max-turns` run is scored on the turns that were played.
 
-It writes `official_scores.jsonl` into the run folder (one line per task: official and harness results side by side, the rebuilt calls, and `agree`) and prints both session success rates, both per-turn accuracies and any task where they disagree.
+It writes `official_scores.jsonl` into the run folder (one line per task: official and harness results side by side, the rebuilt calls, `tool_calls` and `agree`) and `bfcl_scores.json` (run totals), and prints both session success rates, both per-turn accuracies and any task where they disagree.
+
+`tool_calls` (`harness/call_coverage.py`) compares each played turn's ground-truth calls with the model's calls:
+
+| Field | Meaning |
+| --- | --- |
+| `matched` | expected call made with the same arguments (default values filled in, any order in the turn) |
+| `wrong_args` | expected tool called with other arguments (`expected` / `made` pairs) |
+| `missed` | expected call not made in that turn |
+| `extra` | call made that is not in that turn's ground truth |
+| `call_recall` / `call_precision` | matched / expected, matched / made |
+
+Session and turn results still come from BFCL's state and response checks; a turn can pass with
+`wrong_args` or `extra` calls when the end state is the same.
 
 Checked so far: the four mock modes (13 test tasks each) and `results/harness_bf16_143_full` / `_t1` give identical session and per-turn results under both scorers.
 
@@ -150,7 +168,7 @@ Checked so far: the four mock modes (13 test tasks each) and `results/harness_bf
 
 `tests/run_mock_tests.sh` also runs the official scorer on each mode; the last line must be `"disagreements": []`.
 
-`tests/test_bfcl.py` (pytest) drives `harness.runner.run_session` with an in-process fake server and scores every session with both scorers. It checks the split (30 tools, 13 test / 20 trace tasks, no overlap), JSON Schema types, that long-context outputs are longer, that the ground truth passes both scorers on every test task and on `data/long_tasks.jsonl`, that a silent model fails, that both scorers agree when arguments are wrong, that `--max-turns` runs are scored on the played turns, and that unsafe calls never reach `eval`.
+`tests/test_bfcl.py` (pytest) drives `harness.runner.run_session` with an in-process fake server and scores every session with both scorers. It checks the split (30 tools, 13 test / 20 trace tasks, no overlap), JSON Schema types, that long-context outputs are longer, that the ground truth passes both scorers on every test task and on `data/long_tasks.jsonl`, that a silent model fails, that both scorers agree when arguments are wrong, that `--max-turns` runs are scored on the played turns, that unsafe calls never reach `eval`, that `tool_calls` reports matched, missed, wrong-argument and extra calls correctly, and that a run folder gets `official_scores.jsonl`, `bfcl_scores.json` and the score log lines.
 
 ```bash
 pip install pytest                      # the only package needed, for the tests only
