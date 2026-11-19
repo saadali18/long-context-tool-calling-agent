@@ -1,0 +1,19 @@
+{
+  "num_sessions": 1,
+  "official_session_success_rate": 1.0,
+  "harness_session_success_rate": 1.0,
+  "official_per_turn_accuracy": 1.0,
+  "harness_per_turn_accuracy": 1.0,
+  "sessions_in_agreement": 1,
+  "disagreements": [],
+  "tool_calls": {
+    "expected": 2,
+    "made": 3,
+    "matched": 2,
+    "wrong_args": 0,
+    "missed": 0,
+    "extra": 1,
+    "call_recall": 1.0,
+    "call_precision": 0.6667
+  }
+}
