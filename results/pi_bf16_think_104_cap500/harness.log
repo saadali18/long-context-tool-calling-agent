@@ -1,0 +1,31 @@
+2026-11-19 10:11:15,328 INFO    harness | logging_ready level=INFO file_enabled=True
+2026-11-19 10:11:15,335 INFO    harness.bfcl_env | bfcl_tasks_loaded count=200
+2026-11-19 10:11:15,368 INFO    harness.pi_monitor | monitor_start on_pi=True pid=89980 period=1.0
+2026-11-19 10:11:15,369 INFO    harness.runner | session_start task=multi_turn_long_context_104 turns=2 cache=False
+2026-11-19 10:11:15,376 INFO    harness.runner | turn_start task=multi_turn_long_context_104 turn=1/2
+2026-11-19 10:11:15,376 INFO    harness.runner | request_start task=multi_turn_long_context_104 turn=0 step=0 messages=1
+2026-11-19 10:55:14,327 INFO    harness.runner | request_finish task=multi_turn_long_context_104 turn=0 step=0 wall_ms=2638951.0 prompt=3182 cached=0 prefill_ms=2198264.456 decode_ms=440667.031 tool_calls=1
+2026-11-19 10:55:14,327 INFO    harness.runner | tool_start task=multi_turn_long_context_104 turn=0 step=0 name=get_symbol_by_name valid=True
+2026-11-19 10:55:14,327 INFO    harness.runner | tool_finish task=multi_turn_long_context_104 turn=0 step=0 name=get_symbol_by_name elapsed_ms=0.0 result_chars=18
+2026-11-19 10:55:14,328 INFO    harness.runner | request_start task=multi_turn_long_context_104 turn=0 step=1 messages=3
+2026-11-19 11:35:47,713 INFO    harness.runner | request_finish task=multi_turn_long_context_104 turn=0 step=1 wall_ms=2433385.0 prompt=3226 cached=0 prefill_ms=2228997.065 decode_ms=204368.228 tool_calls=1
+2026-11-19 11:35:47,714 INFO    harness.runner | tool_start task=multi_turn_long_context_104 turn=0 step=1 name=get_stock_info valid=True
+2026-11-19 11:35:47,714 INFO    harness.runner | tool_finish task=multi_turn_long_context_104 turn=0 step=1 name=get_stock_info elapsed_ms=0.5 result_chars=7984
+2026-11-19 11:35:47,715 INFO    harness.runner | request_start task=multi_turn_long_context_104 turn=0 step=2 messages=5
+2026-11-19 15:48:54,073 INFO    harness.runner | request_finish task=multi_turn_long_context_104 turn=0 step=2 wall_ms=15186357.5 prompt=11204 cached=0 prefill_ms=7919128.15 decode_ms=7267206.442 tool_calls=0
+2026-11-19 15:48:54,074 INFO    harness.runner | turn_finish task=multi_turn_long_context_104 turn=0 passed=True reason=None wall_ms=20258697.8
+2026-11-19 15:48:54,074 INFO    harness.runner | turn_start task=multi_turn_long_context_104 turn=2/2
+2026-11-19 15:48:54,074 INFO    harness.runner | request_start task=multi_turn_long_context_104 turn=1 step=0 messages=7
+2026-11-19 18:57:43,389 INFO    harness.runner | request_finish task=multi_turn_long_context_104 turn=1 step=0 wall_ms=11329315.4 prompt=15076 cached=0 prefill_ms=10773814.35 decode_ms=555475.832 tool_calls=2
+2026-11-19 18:57:43,390 INFO    harness.runner | tool_start task=multi_turn_long_context_104 turn=1 step=0 name=add_to_watchlist valid=True
+2026-11-19 18:57:43,390 INFO    harness.runner | tool_finish task=multi_turn_long_context_104 turn=1 step=0 name=add_to_watchlist elapsed_ms=0.0 result_chars=31
+2026-11-19 18:57:43,390 INFO    harness.runner | tool_start task=multi_turn_long_context_104 turn=1 step=0 name=get_watchlist valid=True
+2026-11-19 18:57:43,390 INFO    harness.runner | tool_finish task=multi_turn_long_context_104 turn=1 step=0 name=get_watchlist elapsed_ms=0.1 result_chars=3496
+2026-11-19 18:57:43,390 INFO    harness.runner | request_start task=multi_turn_long_context_104 turn=1 step=1 messages=10
+2026-11-19 18:57:43,418 ERROR   harness.llm_client | http_error status=400 elapsed_s=0.0
+2026-11-19 18:57:43,418 ERROR   harness.runner | request_error task=multi_turn_long_context_104 turn=1 step=1 type=ServerError
+2026-11-19 18:57:43,418 INFO    harness.runner | turn_finish task=multi_turn_long_context_104 turn=1 passed=False reason=aborted wall_ms=11329344.5
+2026-11-19 18:57:43,452 INFO    harness.runner | session_finish task=multi_turn_long_context_104 success=False requests=4 wall_ms=31588042.8
+2026-11-19 18:57:43,452 INFO    harness.pi_monitor | monitor_stop samples=30541
+2026-11-19 18:57:43,457 INFO    harness.official_score | score_finish task=multi_turn_long_context_104 official=False turns_passed=1/2 calls_matched=3/3 wrong_args=0 missed=0 extra=1 harness=False agree=True
+2026-11-19 18:57:43,457 INFO    harness.official_score | bfcl_scores sessions=1 session_success=0.0 per_turn_accuracy=0.5 calls_matched=3/3 wrong_args=0 missed=0 extra=1 call_recall=1.0 call_precision=0.75 disagreements=0
