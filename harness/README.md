@@ -180,3 +180,23 @@ BFCL_ROOT=$B python3 -m pytest tests    # BFCL_ROOT defaults to the path above
 - Power comes from the PMIC rails (`vcgencmd pmic_read_adc`), not the whole board.
 - Token counts depend on llama-server returning `timings`. If it doesn't, `reprocessed_tokens` is empty.
 - A call that names a real tool but has bad arguments is still executed. The backend's error text goes back to the model, as in BFCL.
+
+## Gap experiment: teacher forcing (`--teacher-forcing`)
+
+Task 3 asks for the gap between single-turn accuracy and session success, with its cause tested by
+experiment. In a normal (free-running) run, each turn starts from the model's own history and app
+state, so one mistake can make every later turn fail, even when the model then acts correctly.
+
+With `--teacher-forcing`, every turn starts from BFCL's correct history (the user messages, BFCL's
+expected calls and their real outputs) and BFCL's app state at that point. Each turn is then scored
+on its own. An overflow fails only its own turn, and the next turn starts again from the correct
+history. BFCL's official checker is skipped, because it replays the model's calls across the whole
+session. This is an accuracy experiment, so it runs on the host (spec: accuracy may run on a host).
+
+    python3 -m harness.run ... --teacher-forcing --seed 0 --out results/gpu_bf16_think_18_tf_seed0
+    python3 scripts/gap_experiment.py --free results/gpu_bf16_think_18_tasks_seed0 \
+        --forced results/gpu_bf16_think_18_tf_seed0
+
+`gap_experiment.py` prints per-turn accuracy and session success for both, accuracy by turn, the
+same turns compared where the free-running run had already failed, and the session success that
+independent turns would predict.

@@ -141,6 +141,9 @@ def main():
     ap.add_argument("--log-level", choices=["DEBUG","INFO","WARNING","ERROR"], default=os.environ.get("A1_LOG_LEVEL","INFO"))
     ap.add_argument("--log-file", help="default: <out>/harness.log; - disables file")
     ap.add_argument("--no-score", action="store_true", help="skip BFCL scoring at the end of the run")
+    ap.add_argument("--teacher-forcing", action="store_true",
+                    help="gap experiment: start every turn from BFCL's correct history and app state, "
+                         "and score each turn on its own (accuracy only; implies --no-score)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     # Qwen3's recommended sampling per mode (model card), used unless set explicitly
@@ -197,7 +200,8 @@ def main():
 
     cfg = {"temperature": a.temperature, "top_p": a.top_p, "top_k": a.top_k, "min_p": a.min_p,
            "max_tokens": a.max_tokens, "seed": a.seed, "thinking": a.thinking == "on",
-           "cache_prompt": a.cache_prompt, "system_prompt": a.system_prompt, "max_turns": a.max_turns}
+           "cache_prompt": a.cache_prompt, "system_prompt": a.system_prompt, "max_turns": a.max_turns,
+           "teacher_forcing": a.teacher_forcing}
     meta = {
         "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "argv": sys.argv, "config": cfg,
         "classes": classes, "n_tools": len(bfcl.tools_for(classes)), "task_ids": ids,
@@ -231,7 +235,11 @@ def main():
         if proc:
             proc.terminate()
 
-    if not a.no_score:
+    if a.teacher_forcing and not a.no_score:
+        # BFCL's checker replays the model's calls across the whole session, which does not
+        # apply when every turn starts from the correct history. The harness's per-turn score is the result.
+        log.info("official_score_skipped reason=teacher_forcing")
+    elif not a.no_score:
         score_run_folder(out, bfcl, tasks)
 
 

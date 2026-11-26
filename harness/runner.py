@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from .debug_log import trace
 
+import copy
 import json
 import time
 
@@ -35,6 +36,10 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
     messages = []
     if cfg.get("system_prompt") == "bfcl":
         messages.append({"role": "system", "content": BFCL_MULTITURN_HINT})
+    base_messages = list(messages)
+    teacher = bool(cfg.get("teacher_forcing"))
+    gt_history: list[tuple[list, list]] = []   # per finished turn: (BFCL's calls as tool_calls, their outputs)
+    aborted_turns = []
 
     n_turns = len(task.turns) if not cfg.get("max_turns") else min(cfg["max_turns"], len(task.turns))
     model_results_all: list[str] = []
@@ -49,6 +54,22 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
 
     for ti in range(n_turns):
         log.info('turn_start task=%s turn=%d/%d',task.id,ti+1,n_turns)
+        if teacher:
+            # Teacher forcing: replace the model's own history and app state with the correct ones,
+            # so this turn is scored on its own. gt_inst holds the state after BFCL's calls of turns < ti.
+            model_inst = {c: copy.deepcopy(o) for c, o in gt_inst.items()}
+            model_owner = env.method_owner(model_inst)
+            messages = list(base_messages)
+            model_results_all = []
+            for tj, (gt_calls, gt_outs) in enumerate(gt_history):
+                messages.extend(task.turns[tj])
+                if gt_calls:
+                    messages.append({"role": "assistant", "content": "", "tool_calls": gt_calls})
+                    for c, r in zip(gt_calls, gt_outs):
+                        messages.append({"role": "tool", "tool_call_id": c["id"], "content": r})
+                model_results_all.extend(gt_outs)
+            aborted = None
+            log.info("teacher_forcing task=%s turn=%d history_messages=%d",task.id,ti,len(messages))
         messages.extend(task.turns[ti])
         t_turn = time.monotonic()
         turn_calls = 0
@@ -140,10 +161,13 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
                 break  # the model ended its turn
 
         # ---- score this turn (BFCL checker logic) ----
-        gt_results = []
-        for call in task.ground_truth[ti]:
+        gt_results, gt_calls = [], []
+        for k, call in enumerate(task.ground_truth[ti]):
             name, kwargs = env.parse_call_string(call, gt_owner)
             gt_results.append(env.execute(gt_owner, name, kwargs))
+            gt_calls.append({"id": f"gt_{ti}_{k}", "type": "function",
+                             "function": {"name": name, "arguments": json.dumps(kwargs)}})
+        gt_history.append((gt_calls, gt_results))
         turn = {"turn": ti, "model_calls": turn_calls, "gt_calls": len(task.ground_truth[ti]),
                 "wall_ms": round((time.monotonic() - t_turn) * 1000, 1)}
         if aborted:
@@ -166,8 +190,13 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
                 turn.update(passed=True)
         turns.append(turn)
         log.info("turn_finish task=%s turn=%d passed=%s reason=%s wall_ms=%.1f",task.id,ti,turn["passed"],turn.get("reason"),turn["wall_ms"])
-        if aborted:
+        if aborted and teacher:
+            aborted_turns.append(ti)   # the next turn starts again from the correct history
+            aborted = None
+        elif aborted:
             break
+    if teacher and aborted_turns:
+        aborted = f"teacher_forcing: turns {aborted_turns} aborted (server error)"
 
     wall_ms = (time.monotonic() - t_session) * 1000
     first_fail = next((t["turn"] for t in turns if not t["passed"]), None)
@@ -180,6 +209,7 @@ def run_session(task: env.Task, bfcl: env.BFCL, server: LlamaServer, classes: li
         "first_failed_turn": first_fail,
         "fail_reason": next((t.get("reason") for t in turns if not t["passed"]), None),
         "aborted": aborted,
+        "teacher_forcing": teacher,
         "turns": turns,
         "n_requests": n_req,
         "n_calls": len(calls_log),
