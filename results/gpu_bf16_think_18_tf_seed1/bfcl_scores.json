@@ -1,0 +1,20 @@
+{
+  "num_sessions": 18,
+  "teacher_forcing": true,
+  "official_session_success_rate": 0.1667,
+  "harness_session_success_rate": 0.1667,
+  "official_per_turn_accuracy": 0.6184,
+  "harness_per_turn_accuracy": 0.6184,
+  "sessions_in_agreement": 18,
+  "disagreements": [],
+  "tool_calls": {
+    "expected": 90,
+    "made": 81,
+    "matched": 59,
+    "wrong_args": 9,
+    "missed": 22,
+    "extra": 13,
+    "call_recall": 0.6556,
+    "call_precision": 0.7284
+  }
+}
