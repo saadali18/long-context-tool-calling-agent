@@ -1,0 +1,38 @@
+2026-11-26 20:43:15,970 INFO    harness | logging_ready level=INFO file_enabled=True
+2026-11-26 20:43:15,979 INFO    harness.bfcl_env | bfcl_tasks_loaded count=200
+2026-11-26 20:54:42,463 INFO    harness | logging_ready level=INFO file_enabled=True
+2026-11-26 20:54:42,472 INFO    harness.bfcl_env | bfcl_tasks_loaded count=200
+2026-11-26 21:25:56,686 INFO    harness | logging_ready level=INFO file_enabled=True
+2026-11-26 21:25:56,696 INFO    harness.bfcl_env | bfcl_tasks_loaded count=200
+2026-11-26 21:29:01,081 INFO    harness | logging_ready level=INFO file_enabled=True
+2026-11-26 21:29:01,090 INFO    harness.bfcl_env | bfcl_tasks_loaded count=200
+2026-11-26 21:29:47,850 INFO    harness | logging_ready level=INFO file_enabled=True
+2026-11-26 21:29:47,858 INFO    harness.bfcl_env | bfcl_tasks_loaded count=200
+2026-11-26 21:30:03,091 INFO    harness | logging_ready level=INFO file_enabled=True
+2026-11-26 21:30:03,099 INFO    harness.bfcl_env | bfcl_tasks_loaded count=200
+2026-11-26 21:30:03,109 INFO    harness.llm_client | server_wait_ready timeout_s=1800.0
+2026-11-26 21:30:14,281 INFO    harness.llm_client | server_ready elapsed_s=11.2
+2026-11-26 21:30:16,042 INFO    harness.pi_monitor | monitor_start on_pi=False pid=53030 period=1.0
+2026-11-26 21:30:16,043 INFO    harness.runner | session_start task=multi_turn_long_context_100 turns=2 cache=False
+2026-11-26 21:30:16,059 INFO    harness.runner | turn_start task=multi_turn_long_context_100 turn=1/2
+2026-11-26 21:30:16,060 INFO    harness.runner | teacher_forcing task=multi_turn_long_context_100 turn=0 history_messages=0
+2026-11-26 21:30:16,061 INFO    harness.runner | request_start task=multi_turn_long_context_100 turn=0 step=0 messages=1
+2026-11-26 21:30:23,729 INFO    harness.runner | request_finish task=multi_turn_long_context_100 turn=0 step=0 wall_ms=7666.0 prompt=3134 cached=0 prefill_ms=3713.104 decode_ms=3909.279 tool_calls=1
+2026-11-26 21:30:23,733 INFO    harness.runner | tool_start task=multi_turn_long_context_100 turn=0 step=0 name=get_stock_info valid=True
+2026-11-26 21:30:23,734 INFO    harness.runner | tool_finish task=multi_turn_long_context_100 turn=0 step=0 name=get_stock_info elapsed_ms=1.2 result_chars=7983
+2026-11-26 21:30:23,735 INFO    harness.runner | request_start task=multi_turn_long_context_100 turn=0 step=1 messages=3
+2026-11-26 21:30:51,209 INFO    harness.runner | request_finish task=multi_turn_long_context_100 turn=0 step=1 wall_ms=27472.7 prompt=11112 cached=0 prefill_ms=15250.253 decode_ms=12167.92 tool_calls=0
+2026-11-26 21:30:51,214 INFO    harness.runner | turn_finish task=multi_turn_long_context_100 turn=0 passed=True reason=None wall_ms=35153.8
+2026-11-26 21:30:51,214 INFO    harness.runner | turn_start task=multi_turn_long_context_100 turn=2/2
+2026-11-26 21:30:51,216 INFO    harness.runner | teacher_forcing task=multi_turn_long_context_100 turn=1 history_messages=3
+2026-11-26 21:30:51,217 INFO    harness.runner | request_start task=multi_turn_long_context_100 turn=1 step=0 messages=4
+2026-11-26 21:31:28,597 INFO    harness.runner | request_finish task=multi_turn_long_context_100 turn=1 step=0 wall_ms=37379.0 prompt=11192 cached=0 prefill_ms=15425.424 decode_ms=21922.312 tool_calls=2
+2026-11-26 21:31:28,602 INFO    harness.runner | tool_start task=multi_turn_long_context_100 turn=1 step=0 name=trading_login valid=True
+2026-11-26 21:31:28,603 INFO    harness.runner | tool_finish task=multi_turn_long_context_100 turn=1 step=0 name=trading_login elapsed_ms=0.2 result_chars=31
+2026-11-26 21:31:28,603 INFO    harness.runner | tool_start task=multi_turn_long_context_100 turn=1 step=0 name=fund_account valid=True
+2026-11-26 21:31:28,610 INFO    harness.runner | tool_finish task=multi_turn_long_context_100 turn=1 step=0 name=fund_account elapsed_ms=6.7 result_chars=65
+2026-11-26 21:31:28,611 INFO    harness.runner | request_start task=multi_turn_long_context_100 turn=1 step=1 messages=7
+2026-11-26 21:31:59,864 INFO    harness.runner | request_finish task=multi_turn_long_context_100 turn=1 step=1 wall_ms=31251.5 prompt=11294 cached=0 prefill_ms=15942.47 decode_ms=15255.91 tool_calls=0
+2026-11-26 21:31:59,880 INFO    harness.runner | turn_finish task=multi_turn_long_context_100 turn=1 passed=True reason=None wall_ms=68663.7
+2026-11-26 21:31:59,880 INFO    harness.runner | session_finish task=multi_turn_long_context_100 success=True requests=4 wall_ms=103821.7
+2026-11-26 21:31:59,882 INFO    harness.pi_monitor | monitor_stop samples=104
