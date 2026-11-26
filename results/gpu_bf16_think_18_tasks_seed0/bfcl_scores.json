@@ -1,0 +1,25 @@
+{
+  "num_sessions": 18,
+  "official_session_success_rate": 0.2222,
+  "harness_session_success_rate": 0.2222,
+  "official_per_turn_accuracy": 0.7333,
+  "harness_per_turn_accuracy": 0.65,
+  "sessions_in_agreement": 13,
+  "disagreements": [
+    "multi_turn_long_context_116",
+    "multi_turn_long_context_138",
+    "a1_long_context_2",
+    "a1_long_context_3",
+    "a1_long_context_4"
+  ],
+  "tool_calls": {
+    "expected": 69,
+    "made": 72,
+    "matched": 54,
+    "wrong_args": 6,
+    "missed": 9,
+    "extra": 12,
+    "call_recall": 0.7826,
+    "call_precision": 0.75
+  }
+}
